@@ -122,10 +122,11 @@ class Model(nn.Module):
 
         self.seq_len = 512
         self.hidden_size = 768
+        self.device = device
         self._initialize_embeddings()
 
         # base transformer
-        self.transformer = AutoModel.from_pretrained(self.model_name)
+        self.transformer = AutoModel.from_pretrained(self.base_checkpoint)
 
         # hierarchical transformer
         self.transformer2_layer = nn.TransformerEncoderLayer(
@@ -138,7 +139,7 @@ class Model(nn.Module):
         # LWAN
         self.label_attn = LabelAttentionClassifier(self.hidden_size, self.num_labels)
         self.temp_label_attn = TemporalLabelAttentionClassifier(
-            self.hidden_size, self.seq_len, self.num_labels
+            self.hidden_size, self.seq_len, self.num_labels, device=device
         )
 
     def _initialize_embeddings(self):

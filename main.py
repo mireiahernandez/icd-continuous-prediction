@@ -33,7 +33,7 @@ if __name__ == "__main__":
         "run_name": "Run_all_notes_last_second_transf"
         ,"project_path": '/vol/bitbucket/mh1022/temporal-modelling-icd'
         ,"base_checkpoint": os.path.join("", "RoBERTa-base-PM-M3-Voc-hf")
-        ,"attention_heads": 1
+        ,"num_attention_heads": 1
         ,"num_layers": 1
         ,"lr": 5e-5
         ,"max_chunks": 2
