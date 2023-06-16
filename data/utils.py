@@ -2,12 +2,7 @@ from data.custom_dataset import CustomDataset
 import torch
 import transformers
 
-dataloader_params = {
-    'batch_size': 1,
-    'shuffle': True,
-    'num_workers': 6,
-    'pin_memory': True
-}
+
 
 def get_dataset(df,
                 split,
@@ -18,6 +13,12 @@ def get_dataset(df,
   return CustomDataset(df[df.SPLIT == split], tokenizer = tokenizer, max_chunks = max_chunks, priority_mode = priority_mode, priority_idxs = priority_idxs)
 
 def get_dataloader(dataset):
+  dataloader_params = {
+      'batch_size': 1,
+      'shuffle': True,
+      'num_workers': 6,
+      'pin_memory': True
+  }
   return torch.utils.data.DataLoader(dataset, **dataloader_params)
 
 def get_tokenizer(checkpoint):
