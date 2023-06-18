@@ -14,8 +14,18 @@ import itertools
 import torch.utils.checkpoint
 from torch.cuda.amp import GradScaler, autocast
 from training.trainer import Trainer
+import argparse
 
 if __name__ == "__main__":
+    import torch.multiprocessing
+    torch.multiprocessing.set_sharing_strategy('file_system')
+    parser = argparse.ArgumentParser(description="Train model",
+                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-n", "--num_chunks", type=int, help="number of chunks")
+    parser.add_argument("-r", "--run_name", type=str, help="run name")
+    args = parser.parse_args()
+    args_config = vars(args)
+
     # device
     USE_GPU = True
     dtype = torch.float32
@@ -27,17 +37,18 @@ if __name__ == "__main__":
     print(device)
 
     ### for debugging use cpu
-    device = cpu
+    #device = cpu
 
     config = {
-        "run_name": "Run_all_notes_last_second_transf"
+    #    "run_name": "Run_test_TLWAN"
+        "run_name": args_config['run_name']
         ,"project_path": '/vol/bitbucket/mh1022/temporal-modelling-icd'
         ,"base_checkpoint": os.path.join("", "RoBERTa-base-PM-M3-Voc-hf")
         ,"num_attention_heads": 1
         ,"num_layers": 1
         ,"lr": 5e-5
-        ,"max_chunks": 2
-        ,"grad_accumulation": 2
+        ,"max_chunks": args_config['num_chunks']
+        ,"grad_accumulation": args_config['num_chunks']
         ,"use_positional_embeddings": True
         ,"use_reverse_positional_embeddings": True
         ,"priority_mode": "Last"
@@ -65,24 +76,30 @@ if __name__ == "__main__":
     
     # get tokenizer
     tokenizer = get_tokenizer(config["base_checkpoint"])
-    
+
     # Get training / validation / test
     dataset_config = {
         "max_chunks" : config["max_chunks"],
         "priority_mode" : config["priority_mode"],
         "priority_idxs" : config["priority_idxs"]
     }
-    training_set = get_dataset(notes_agg_df[:1000], "TRAIN", tokenizer = tokenizer, **dataset_config)
+    training_set = get_dataset(notes_agg_df, "TRAIN", tokenizer = tokenizer, **dataset_config)
     training_generator = get_dataloader(training_set)
+    
+    validation_set = training_set
+    validation_generator = training_generator
 
-    validation_set = get_dataset(notes_agg_df, "VALIDATION", tokenizer = tokenizer, **dataset_config)
-    validation_generator = get_dataloader(validation_set)
+    test_set = training_set
+    test_generator = training_generator
 
-    test_set = get_dataset(notes_agg_df, "TEST", tokenizer = tokenizer, **dataset_config)
-    test_generator = get_dataloader(test_set)
+    # validation_set = get_dataset(notes_agg_df, "VALIDATION", tokenizer = tokenizer, **dataset_config)
+    # validation_generator = get_dataloader(validation_set)
+
+    # test_set = get_dataset(notes_agg_df, "TEST", tokenizer = tokenizer, **dataset_config)
+    # test_generator = get_dataloader(test_set)
 
     # only to run on CPU
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    #os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     model = Model(config, device=device)
 
@@ -91,12 +108,13 @@ if __name__ == "__main__":
     steps_per_epoch = int(
         np.ceil(len(training_generator) // config["grad_accumulation"])
     )
+
     # steps_per_epoch = 1
     lr_scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=config["lr"],
         three_phase=True,
-        total_steps=config["max_epochs"] * steps_per_epoch,
+        total_steps=config["max_epochs"] * steps_per_epoch
     )
 
     scaler = GradScaler()
@@ -147,6 +165,7 @@ if __name__ == "__main__":
     trainer.train(
         training_generator,
         training_args,
+        validation_generator,
         grad_accumulation_steps=config["grad_accumulation"],
         epochs=config["max_epochs"],
     )

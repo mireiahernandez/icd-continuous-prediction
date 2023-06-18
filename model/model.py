@@ -79,14 +79,15 @@ class TemporalLabelAttentionClassifier(nn.Module):
 
         mask = torch.zeros(size=(Nn, Nc * T)).to(device=self.device)
         for i in range(Nn):
-            mask[i, : (note_end_chunk_ids[i] + 1) * T] = float("-inf")
+            if i+1 < Nn:
+                mask[i+1, : (note_end_chunk_ids[i] + 1) * T] = float("-inf")
         ###### FIX IT IS NOT note_end_chunk_ids we need to mulitply by T !!!!!!!!!!!!!!!!!!!!!!!!!
 
         # shape Nn x H x Nc*T
         # (Nn x NcT x 1) x (1 x NcT x H) -
         # temporal_encoding = torch.mul(mask.unsqueeze(2), encoding.unsqueeze(0)) # Nn x NcT x H
-        breakpoint()
         # encoding ((Nc x T) x H) x label queries (H x Nl) = ((NcxT) x Nl)
+        # print(f"encoding: {encoding.shape}, note_end_chunk_ids: {note_end_chunk_ids}, mask: {mask}")
         attention_scores = encoding @ self.label_queries
 
         # mask attention scores: Nn x NcxT x Nl
@@ -107,11 +108,12 @@ class TemporalLabelAttentionClassifier(nn.Module):
         # shape (Nn, Nl)
         # label weights (H, Nl)
         score = torch.sum(
-            attention_values * self.label_weights.unsqueeze(0).view(1, Nl, H), dim=1
+            attention_values * self.label_weights.unsqueeze(0).view(1, Nl, H), dim=2
         )  # num_labels
         # shape (Nn, Nl)
-        probability = torch.sigmoid(score)
-        return probability
+        # probability = torch.sigmoid(score)
+        # return probability
+        return score
 
 
 class Model(nn.Module):

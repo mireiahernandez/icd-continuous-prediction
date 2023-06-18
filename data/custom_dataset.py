@@ -82,8 +82,7 @@ class CustomDataset(Dataset):
                 )
             )
         )
-        # store the final chunk of each note
-        note_end_chunk_ids = self._get_note_end_chunk_ids(seq_ids)
+
         # temporal data
         hours_elapsed = data.HOURS_ELAPSED
         percent_elapsed = data.PERCENT_ELAPSED
@@ -140,11 +139,14 @@ class CustomDataset(Dataset):
             category_ids = torch.LongTensor(category_ids)
             seq_ids = seq_ids[-self.max_chunks :]
             category_ids = category_ids[-self.max_chunks :]
+        
+        # store the final chunk of each note
+        note_end_chunk_ids = self._get_note_end_chunk_ids(seq_ids)
 
         seq_id_vals = torch.unique(seq_ids).tolist()
         seq_id_dict = {seq: idx for idx, seq in enumerate(seq_id_vals)}
         seq_ids = seq_ids.apply_(seq_id_dict.get)
-
+        
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
