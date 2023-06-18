@@ -87,10 +87,10 @@ if __name__ == "__main__":
     training_generator = get_dataloader(training_set)
     
     validation_set =  get_dataset(notes_agg_df, "VALIDATION", tokenizer = tokenizer, **dataset_config)
-    validation_generator = get_dataloader(training_set)
+    validation_generator = get_dataloader(validation_set)
 
     test_set = get_dataset(notes_agg_df, "TEST", tokenizer = tokenizer, **dataset_config)
-    test_generator = get_dataloader(training_set)
+    test_generator = get_dataloader(test_set)
 
     # validation_set = get_dataset(notes_agg_df, "VALIDATION", tokenizer = tokenizer, **dataset_config)
     # validation_generscator = get_dataloader(validation_set)
