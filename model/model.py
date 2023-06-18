@@ -117,6 +117,10 @@ class TemporalLabelAttentionClassifier(nn.Module):
 
 
 class Model(nn.Module):
+    """ Model for ICD-9 code temporal predictions.
+    
+    Model based on HTDC (Ng et al, 2022), with the original
+    contribution of adding the temporal aspect."""
     def __init__(self, config, device):
         super().__init__()
         for key in config:

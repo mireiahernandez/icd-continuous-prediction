@@ -9,6 +9,9 @@ from sklearn.metrics import (
 
 
 class MyMetrics:
+    """ Custom metrics for ICD-9 code predictions.
+    
+    Code based on HTDC (Ng et al, 2022)"""
     def _compute(self, hyps, refs, pred_cutoff=0.5):
         results = {}
 

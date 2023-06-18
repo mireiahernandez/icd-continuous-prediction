@@ -10,6 +10,9 @@ from torch.utils.data import Dataset
 
 
 class CustomDataset(Dataset):
+    """ Custom dataset for icd-9 code prediction.
+    
+    Code based on HTDC (Ng et al, 2022)"""
     def __init__(
         self,
         notes_agg_df,

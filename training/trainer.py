@@ -26,6 +26,9 @@ from transformers import (
 )
 
 class Trainer:
+    """ Custom trainer for icd-9 code prediction.
+    
+    Code based on HTDC (Ng et al, 2022)"""
     def __init__(
         self,
         model,
