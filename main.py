@@ -86,20 +86,20 @@ if __name__ == "__main__":
     training_set = get_dataset(notes_agg_df, "TRAIN", tokenizer = tokenizer, **dataset_config)
     training_generator = get_dataloader(training_set)
     
-    validation_set = training_set
-    validation_generator = training_generator
+    validation_set =  get_dataset(notes_agg_df, "VALIDATION", tokenizer = tokenizer, **dataset_config)
+    validation_generator = get_dataloader(training_set)
 
-    test_set = training_set
-    test_generator = training_generator
+    test_set = get_dataset(notes_agg_df, "TEST", tokenizer = tokenizer, **dataset_config)
+    test_generator = get_dataloader(training_set)
 
     # validation_set = get_dataset(notes_agg_df, "VALIDATION", tokenizer = tokenizer, **dataset_config)
-    # validation_generator = get_dataloader(validation_set)
+    # validation_generscator = get_dataloader(validation_set)
 
     # test_set = get_dataset(notes_agg_df, "TEST", tokenizer = tokenizer, **dataset_config)
     # test_generator = get_dataloader(test_set)
 
     # only to run on CPU
-    #os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     model = Model(config, device=device)
 
