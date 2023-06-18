@@ -19,7 +19,7 @@ def evaluate(
         hyps = []
         refs = []
         avail_doc_count = []
-
+        print(f"Starting validation loop...")
         for t, data in enumerate(tqdm(generator)):
             labels = data["label"][0][: model.num_labels]
 
