@@ -84,7 +84,9 @@ class Trainer:
                         scores[-1, :][None, :], labels.to(self.device, dtype=self.dtype)[None, :]
                     )
                     self.scaler.scale(loss).backward()
-                    hyps.append(scores[-1, :].detach().cpu().numpy())
+                    # convert to probabilities
+                    probs = F.sigmoid(scores)
+                    hyps.append(probs[-1, :].detach().cpu().numpy())
                     refs.append(labels.detach().cpu().numpy())
 
                     if ((t + 1) % grad_accumulation_steps == 0) or (
@@ -94,7 +96,9 @@ class Trainer:
                         self.scaler.update()
                         self.optimizer.zero_grad()
                         self.lr_scheduler.step()
-
+                # if t==1000:
+                #     break
+            print("Starting evaluation...")
             print("Epoch: %d" % (training_args['TOTAL_COMPLETED_EPOCHS']))
             
             result = self.evaluate_and_save_results(
@@ -145,7 +149,7 @@ class Trainer:
     
     def evaluate_and_save_results(self, hyps, refs, mymetrics, training_args, validation_generator):
         train_metrics = mymetrics.from_numpy(np.asarray(hyps), np.asarray(refs))
-
+        print(f"Calculating validation metrics with a val dataset of {len(validation_generator)}...")
         validation_metrics = evaluate(
             mymetrics, self.model, validation_generator, self.device, optimise_threshold=True
         )
