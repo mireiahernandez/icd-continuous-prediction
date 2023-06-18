@@ -14,7 +14,7 @@ class DataProcessor:
 
     def __init__(self, dataset_path, config):        
         self.notes_df = pd.read_csv(os.path.join(dataset_path, "NOTEEVENTS.csv"))
-        # self.notes_df = self.notes_df.sort_values(by='HADM_ID')[:1000]
+        # self.notes_df = self.notes_df.sort_values(by='HADM_ID')[:3000]
         self.labels_df = pd.read_csv(
             os.path.join(dataset_path, "splits/caml_splits.csv")
         )
