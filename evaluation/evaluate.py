@@ -37,10 +37,10 @@ def evaluate(
                 category_ids=category_ids.to(device, dtype=torch.long),
                 note_end_chunk_ids=note_end_chunk_ids,
             )
-
+            probs = F.sigmoid(scores)
             ids.append(data["hadm_id"][0].item())
             avail_doc_count.append(avail_docs)
-            hyps.append(scores[-1, :].detach().cpu().numpy())
+            hyps.append(probs[-1, :].detach().cpu().numpy())
             refs.append(labels.detach().cpu().numpy())
 
         if optimise_threshold:
