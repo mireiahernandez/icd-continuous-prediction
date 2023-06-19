@@ -109,6 +109,8 @@ class Trainer:
             training_args['TOTAL_COMPLETED_EPOCHS'] += 1
 
             if result["validation_f1_micro"] > training_args['CURRENT_BEST']:
+                CURRENT_BEST = result['validation_f1_micro']
+                CURRENT_PATIENCE_COUNT = 0
                 best_path = os.path.join(self.config['project_path'], f"results/BEST_{self.config['run_name']}.pth")
                 if self.config["save_model"]:
                     self.save_model(result, training_args, best_path)
