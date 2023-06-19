@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import transformers
 import torch.nn.functional as F
+import ipdb
 from transformers import (
     AutoModelForSequenceClassification,
     TrainingArguments,
@@ -40,9 +41,66 @@ class LabelAttentionClassifier(nn.Module):
         attention_value = encoding.T @ attention_weights  # hidden_size x num labels
 
         score = torch.sum(attention_value * self.label_weights, dim=0)  # num_labels
-        probability = torch.sigmoid(score)
+        #probability = torch.sigmoid(score)
 
-        return probability
+        #return probability
+        return score.unsqueeze(0) # CHANGED THIS FOR DEBUGGING
+
+class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
+    def __init__(self, hidden_size, seq_len, num_labels, device):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_labels = num_labels
+        self.seq_len = seq_len
+        self.device = device
+
+        self.multiheadattn = nn.MultiheadAttention(hidden_size, num_heads=1, batch_first=True)
+
+        self.label_queries = nn.parameter.Parameter(
+            torch.normal(
+                0, 0.1, size=(self.num_labels, self.hidden_size), dtype=torch.float
+            ),
+            requires_grad=True,
+        )
+        self.label_weights = nn.parameter.Parameter(
+            torch.normal(
+                0, 0.1, size=(self.hidden_size, self.num_labels), dtype=torch.float
+            ),
+            requires_grad=True,
+        )
+
+    def forward(self, encoding, note_end_chunk_ids):
+        # encoding: Tensor of size (Nc x T) x H
+        # mask: Tensor of size Nn x (Nc x T) x H
+        # temporal_encoding = Nn x (N x T) x hidden_size
+        T = self.seq_len
+        Nc = int(encoding.shape[0] / T)
+        Nn = len(note_end_chunk_ids)
+        H = self.hidden_size
+        Nl = self.num_labels
+
+        # label query: shape L, H
+        # encoding: hape NcxT, H
+        # query shape:  Nn, L, H
+        # key shape: Nn, Nc*T, H
+        # values shape: Nn, Nc*T, H
+        # key padding mask: Nn, Nc*T (true if ignore)
+        # output: N, L, H
+        mask = torch.ones(size=(Nn, Nc * T), dtype=torch.bool).to(device=self.device)
+        for i in range(Nn):
+            mask[i, : (note_end_chunk_ids[i] + 1) * T] = False
+        attn_output = self.multiheadattn.forward(
+            query = self.label_queries.repeat(Nn,1,1),
+            key = encoding.repeat(Nn, 1, 1),
+            value = encoding.repeat(Nn, 1, 1),
+            key_padding_mask = mask,
+            need_weights=False,
+        )[0]
+
+        score = torch.sum(
+            attn_output * self.label_weights.unsqueeze(0).view(1, self.num_labels, self.hidden_size), dim=2
+        )
+        return score
 
 
 class TemporalLabelAttentionClassifier(nn.Module):
@@ -147,6 +205,9 @@ class Model(nn.Module):
         self.temp_label_attn = TemporalLabelAttentionClassifier(
             self.hidden_size, self.seq_len, self.num_labels, device=device
         )
+        self.temp_label_multiheadattn = TemporalMultiHeadLabelAttentionClassifier(
+            self.hidden_size, self.seq_len, self.num_labels, device=device
+        )
 
     def _initialize_embeddings(self):
         self.pelookup = nn.parameter.Parameter(
@@ -225,10 +286,12 @@ class Model(nn.Module):
             sequence_output = sequence_output[
                 :, 0, :
             ]  # remove the singleton to get something of shape [#chunks*512, hidden_size]
-
-        # sequence_output = self.label_attn(sequence_output) # apply label attention at token-level
-        sequence_output = self.temp_label_attn(
+        # note_end_chunk_ids = [0, 3]
+        # sequence_output_notemp = self.label_attn(sequence_output) # apply label attention at token-level
+        # sequence_output_temp = self.temp_label_attn(
+        #     sequence_output, note_end_chunk_ids
+        # )  # apply label attention at token-level
+        sequence_output = self.temp_label_multiheadattn(
             sequence_output, note_end_chunk_ids
         )  # apply label attention at token-level
-
         return sequence_output
