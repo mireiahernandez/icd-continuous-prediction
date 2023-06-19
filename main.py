@@ -61,7 +61,7 @@ if __name__ == "__main__":
         ,"final_aggregation": "cls"
         ,"only_discharge_summary": False
         ,"patience_threshold": 3
-        ,"max_epochs": 20
+        ,"max_epochs": 3
         ,"save_model": False
         ,"load_from_checkpoint": False
         ,"checkpoint_name": "Run_all_notes_last_second_transf"
