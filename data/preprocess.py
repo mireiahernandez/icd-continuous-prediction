@@ -21,6 +21,9 @@ class DataProcessor:
         self.config = config
         self.filter_discharge_summary()
 
+    def get_categories_mapping(self):
+        return self.categories_mapping
+    
     def aggregate_data(self):
         """Preprocess data and aggregate."""
         notes_agg_df = self.aggregate_hadm_id()
@@ -116,6 +119,7 @@ class DataProcessor:
             .index
         )
         categories_mapping = {categories[i]: i for i in range(len(categories))}
+        self.categories_mapping = categories_mapping
         print(categories_mapping)
 
         notes_agg_df["CATEGORY_INDEX"] = notes_agg_df["CATEGORY"].apply(

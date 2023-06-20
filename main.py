@@ -15,6 +15,8 @@ import torch.utils.checkpoint
 from torch.cuda.amp import GradScaler, autocast
 from training.trainer import Trainer
 import argparse
+import ipdb
+
 
 if __name__ == "__main__":
     import torch.multiprocessing
@@ -61,8 +63,8 @@ if __name__ == "__main__":
         ,"final_aggregation": "cls"
         ,"only_discharge_summary": False
         ,"patience_threshold": 3
-        ,"max_epochs": 3
-        ,"save_model": False
+        ,"max_epochs": 20
+        ,"save_model": True
         ,"load_from_checkpoint": False
         ,"checkpoint_name": "Run_all_notes_last_second_transf"
     }
@@ -73,7 +75,8 @@ if __name__ == "__main__":
     # process and aggregate raw data
     dp = DataProcessor(dataset_path="dataset", config=config)
     notes_agg_df = dp.aggregate_data()
-    
+    categories_mapping = dp.get_categories_mapping()
+
     # get tokenizer
     tokenizer = get_tokenizer(config["base_checkpoint"])
 
@@ -81,9 +84,12 @@ if __name__ == "__main__":
     dataset_config = {
         "max_chunks" : config["max_chunks"],
         "priority_mode" : config["priority_mode"],
-        "priority_idxs" : config["priority_idxs"]
+        "priority_idxs" : config["priority_idxs"],
+        "categories_mapping": categories_mapping
     }
     training_set = get_dataset(notes_agg_df, "TRAIN", tokenizer = tokenizer, **dataset_config)
+    # print(f"categories mapping in the training set: {training_set.categories_mapping}")
+
     training_generator = get_dataloader(training_set)
     
     validation_set =  get_dataset(notes_agg_df, "VALIDATION", tokenizer = tokenizer, **dataset_config)
@@ -106,9 +112,9 @@ if __name__ == "__main__":
     optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=0)
 
     steps_per_epoch = int(
-        np.ceil(len(training_generator) // config["grad_accumulation"])
-    )
-
+        np.ceil(len(training_generator) / config["grad_accumulation"])
+    ) + 1
+    print(f"number of total steps: {config['max_epochs'] * steps_per_epoch}")
     # steps_per_epoch = 1
     lr_scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
@@ -116,6 +122,7 @@ if __name__ == "__main__":
         three_phase=True,
         total_steps=config["max_epochs"] * steps_per_epoch
     )
+    print(config["max_epochs"] * steps_per_epoch)
 
     scaler = GradScaler()
 
@@ -146,9 +153,11 @@ if __name__ == "__main__":
         training_args['CURRENT_PATIENCE_COUNT'] = checkpoint["current_patience_count"]
 
     else:
-        pd.DataFrame({}).to_csv(
-            os.path.join(config['project_path'], f"results/{config['run_name']}.csv")
-        )  # Create dummy csv because of GDrive bug
+        result_types = ['2d','5d','13d','all']
+        for result_type in result_types:
+            pd.DataFrame({}).to_csv(
+                os.path.join(config['project_path'], f"results/{config['run_name']}_{result_type}.csv")
+            )  # Create dummy csv because of GDrive bug
 
     results = {}
 
@@ -160,7 +169,9 @@ if __name__ == "__main__":
         lr_scheduler,
         config,
         device,
-        dtype
+        dtype,
+        categories_mapping,
+
     )
     trainer.train(
         training_generator,

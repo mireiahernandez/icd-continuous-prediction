@@ -7,7 +7,7 @@ import ast
 import os
 import itertools
 from torch.utils.data import Dataset
-
+import ipdb
 
 class CustomDataset(Dataset):
     """ Custom dataset for icd-9 code prediction.
@@ -20,6 +20,7 @@ class CustomDataset(Dataset):
         max_chunks,
         priority_mode="Last",  # "First, "Last", "Index", "Diverse"
         priority_idxs=[],
+        categories_mapping=[],
     ):
         self.notes_agg_df = notes_agg_df
         self.tokenizer = tokenizer
@@ -27,7 +28,8 @@ class CustomDataset(Dataset):
         assert priority_mode in ["First", "Last", "Index", "Diverse"]
         self.priority_mode = priority_mode
         self.priority_idxs = priority_idxs
-
+        self.categories_mapping = categories_mapping
+        # print(f"categories mapping in the init: {self.categories_mapping}")
         if self.priority_mode == "Index":
             self.priority_scores_dict = {i: 0 for i in range(15)}
             # Prioritise Discharge Summaries (idx = 5) first, followed by selected idx
@@ -60,7 +62,7 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         data = self.notes_agg_df.iloc[idx]
-
+        # print(f"categories mapping in the getitem: {self.categories_mapping}")
         output = [self.tokenize(doc) for doc in data.TEXT]
         hadm_id = data.HADM_ID
         # doc[input_ids] is (# chunks, 512), i.e., if note is longer than 512, it returns len/512 # chunks
@@ -127,6 +129,7 @@ class CustomDataset(Dataset):
             attention_mask = attention_mask[priority_indices]
             seq_ids = seq_ids[priority_indices]
             category_ids = category_ids[priority_indices]
+            hours_elapsed = hours_elapsed[priority_indices]
 
         if self.priority_mode == "First":
             input_ids = input_ids[: self.max_chunks]
@@ -135,13 +138,22 @@ class CustomDataset(Dataset):
             category_ids = torch.LongTensor(category_ids)
             seq_ids = seq_ids[: self.max_chunks]
             category_ids = category_ids[: self.max_chunks]
+            hours_elapsed = category_ids[: self.max_chunks]
+
         else:
-            input_ids = input_ids[-self.max_chunks :]
-            attention_mask = attention_mask[-self.max_chunks :]
+            # only take notes up to discharge summary, ignore posterior
+            # notes, e.g. nursing reports, which are brief and made after
+            # the patient has been discharged
+            last_ds = self.find_last_discharge_summary(category_ids)
+            delta = input_ids.shape[0] - last_ds - 1
+            input_ids = input_ids[-(self.max_chunks+delta) :last_ds+1]
+            attention_mask = attention_mask[-self.max_chunks :last_ds+1]
             seq_ids = torch.LongTensor(seq_ids)
             category_ids = torch.LongTensor(category_ids)
             seq_ids = seq_ids[-self.max_chunks :]
             category_ids = category_ids[-self.max_chunks :]
+            hours_elapsed = hours_elapsed[-self.max_chunks:]
+
         
         # store the final chunk of each note
         note_end_chunk_ids = self._get_note_end_chunk_ids(seq_ids)
@@ -160,3 +172,14 @@ class CustomDataset(Dataset):
             "hadm_id": hadm_id,
             "hours_elapsed": hours_elapsed,
         }
+    
+    def find_last_discharge_summary(self, category_ids):
+        last_ds = -1
+        # print(f"categories mapping in the find last ds: {self.categories_mapping}")
+
+        # print(category_ids.tolist())
+        # print(self.categories_mapping)
+        for i, cat in enumerate(category_ids.tolist()):
+            if cat == self.categories_mapping["Discharge summary"]:
+                last_ds = i
+        return i

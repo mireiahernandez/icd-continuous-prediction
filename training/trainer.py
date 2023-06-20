@@ -17,6 +17,7 @@ import random
 from tqdm import tqdm
 from torch.cuda.amp import GradScaler, autocast
 from evaluation.metrics import MyMetrics
+import ipdb
 from evaluation.evaluate import evaluate
 from transformers import (
     AutoModelForSequenceClassification,
@@ -37,7 +38,8 @@ class Trainer:
         lr_scheduler,
         config,
         device,
-        dtype
+        dtype,
+        categories_mapping
     ):
         self.model = model
         self.optimizer = optimizer
@@ -46,7 +48,83 @@ class Trainer:
         self.config = config
         self.device = device
         self.dtype = dtype
-        
+        self.categories_mapping = categories_mapping
+    
+    def find_last_indices_with_value_type(self, floats, cat_types):
+        # Initialize variables to keep track of the last indices
+        last_index_2 = -1
+        last_index_5 = -1
+        last_index_13 = -1
+
+        # Iterate through the list of floats and value_types
+        # 5 -> discharge summary
+        for i, (num, value_type) in enumerate(zip(floats, cat_types)):
+            if value_type != self.categories_mapping['Discharge summary']:
+                if num < 2*24:
+                    last_index_2 = i
+                if num < 5*24:
+                    last_index_5 = i
+                if num < 13*24:
+                    last_index_13 = i
+
+        # Return the last indices meeting the conditions or -1 if no such indices exist
+        return last_index_2, last_index_5, last_index_13 
+
+    def update_hyps_temp(
+        self,
+        hyps_temp,
+        probs,
+        hours_elapsed,
+        category_ids,
+    ):
+        cutoff_2d, cutoff_5d, cutoff_13d = self.find_last_indices_with_value_type(hours_elapsed[0].tolist(), category_ids.tolist())
+        try:
+            if cutoff_2d != -1:
+                hyps_temp['2d'].append(probs[cutoff_2d,:])
+            if cutoff_5d != -1:
+                hyps_temp['5d'].append(probs[cutoff_5d,:])
+            if cutoff_13d != -1:
+                hyps_temp['13d'].append(probs[cutoff_13d,:])
+        except:
+            ipdb.set_trace()
+        return hyps_temp
+
+    def validate_loop(self, validation_generator):
+        self.model.eval()
+        with torch.no_grad():
+            ids = []
+            hyps = []
+            refs = []
+            hyps_temp = {'2d': [], '5d': [],'13d': []}
+            avail_doc_count = []
+            print(f"Starting validation loop...")
+            for t, data in enumerate(tqdm(validation_generator)):
+                labels = data["label"][0][: self.model.num_labels]
+
+                input_ids = data["input_ids"][0]
+                attention_mask = data["attention_mask"][0]
+                seq_ids = data["seq_ids"][0]
+                category_ids = data["category_ids"][0]
+                avail_docs = seq_ids.max().item() + 1
+                note_end_chunk_ids = data["note_end_chunk_ids"]
+                hours_elapsed = data["hours_elapsed"]
+
+
+                scores = self.model(
+                    input_ids=input_ids.to(self.device, dtype=torch.long),
+                    attention_mask=attention_mask.to(self.device, dtype=torch.long),
+                    seq_ids=seq_ids.to(self.device, dtype=torch.long),
+                    category_ids=category_ids.to(self.device, dtype=torch.long),
+                    note_end_chunk_ids=note_end_chunk_ids,
+                )
+                probs = F.sigmoid(scores)
+                ids.append(data["hadm_id"][0].item())
+                avail_doc_count.append(avail_docs)
+                hyps.append(scores[-1, :].detach().cpu().numpy())
+                hyps_temp = self.update_hyps_temp(hyps_temp, probs, hours_elapsed, category_ids)
+                refs.append(labels.detach().cpu().numpy())
+        return hyps, hyps_temp, refs
+
     def train(
         self,
         training_generator,
@@ -61,6 +139,7 @@ class Trainer:
 
         for e in range(training_args['TOTAL_COMPLETED_EPOCHS'], epochs):
             hyps = []
+            hyps_temp = {'2d': [], '5d': [],'13d': []}
             refs = []
             for t, data in enumerate(tqdm(training_generator)):
                 labels = data["label"][0][: self.model.num_labels]
@@ -69,7 +148,7 @@ class Trainer:
                 seq_ids = data["seq_ids"][0]
                 category_ids = data["category_ids"][0]
                 note_end_chunk_ids = data["note_end_chunk_ids"]
-
+                hours_elapsed = data["hours_elapsed"]
                 with torch.cuda.amp.autocast(enabled=True) as autocast, torch.backends.cuda.sdp_kernel(enable_flash=False) as disable :
                 # with autocast():
                     scores = self.model(
@@ -85,8 +164,10 @@ class Trainer:
                     )
                     self.scaler.scale(loss).backward()
                     # convert to probabilities
+
                     probs = F.sigmoid(scores)
                     hyps.append(probs[-1, :].detach().cpu().numpy())
+                    hyps_temp = self.update_hyps_temp(hyps_temp, probs, hours_elapsed, category_ids)
                     refs.append(labels.detach().cpu().numpy())
 
                     if ((t + 1) % grad_accumulation_steps == 0) or (
@@ -101,9 +182,14 @@ class Trainer:
             print("Starting evaluation...")
             print("Epoch: %d" % (training_args['TOTAL_COMPLETED_EPOCHS']))
             
-            result = self.evaluate_and_save_results(
-                hyps, refs, mymetrics, training_args, validation_generator
-            )
+            val_hyps, val_hyps_temp, val_refs = self.validate_loop(validation_generator)
+            result = self.compute_and_save_results(hyps, refs, val_hyps, val_refs, mymetrics, training_args)
+            if hyps_temp['2d'] != []:
+                result_2d = self.compute_and_save_results(hyps_temp['2d'], refs, val_hyps_temp['2d'], val_refs, mymetrics, training_args, result_type='2d')
+            if hyps_temp['5d'] != []:
+                result_5d = self.compute_and_save_results(hyps_temp['5d'], refs, val_hyps_temp['5d'], val_refs, mymetrics, training_args, result_type='5d')
+            if hyps_temp['13d'] != []:
+                result_13d = self.compute_and_save_results(hyps_temp['13d'], refs, val_hyps_temp['13d'], val_refs, mymetrics, training_args, result_type='13d')
 
             training_args['CURRENT_PATIENCE_COUNT'] += 1
             training_args['TOTAL_COMPLETED_EPOCHS'] += 1
@@ -113,7 +199,7 @@ class Trainer:
                 CURRENT_PATIENCE_COUNT = 0
                 best_path = os.path.join(self.config['project_path'], f"results/BEST_{self.config['run_name']}.pth")
                 if self.config["save_model"]:
-                    self.save_model(result, training_args, best_path)
+                    self._save_model(result, training_args, best_path)
 
             if self.config["save_model"]:
                 model_path = os.path.join(
@@ -127,13 +213,9 @@ class Trainer:
                 print("Stopped upon hitting early patience threshold ")
                 break
 
-            if (self.config["max_epochs"] > 0) and (
-                training_args['TOTAL_COMPLETED_EPOCHS'] >= self.config["max_epochs"]
-            ):
-                print("Stopped upon hitting max number of training epochs")
-                break
 
-    def __save_model(self, result, training_args, save_path):
+
+    def _save_model(self, result, training_args, save_path):
             torch.save(
                 {
                     "model_state_dict": self.model.state_dict(),
@@ -149,17 +231,20 @@ class Trainer:
                 save_path,
             )
     
-    def evaluate_and_save_results(self, hyps, refs, mymetrics, training_args, validation_generator):
+    def compute_and_save_results(
+            self, 
+            hyps,
+            refs,
+            val_hyps,
+            val_refs,
+            mymetrics,
+            training_args,
+            result_type = 'all'
+        ):
         train_metrics = mymetrics.from_numpy(np.asarray(hyps), np.asarray(refs))
-        print(f"Calculating validation metrics with a val dataset of {len(validation_generator)}...")
-        validation_metrics = evaluate(
-            mymetrics, self.model, validation_generator, self.device, optimise_threshold=True
-        )
+        validation_metrics = mymetrics.from_numpy(np.asarray(val_hyps), np.asarray(val_refs))
 
-        a = {
-            f"validation_{key}": validation_metrics[key]
-            for key in validation_metrics.keys()
-        }
+        a = {f"validation_{key}": validation_metrics[key] for key in validation_metrics.keys()}
         b = {f"train_{key}": train_metrics[key] for key in train_metrics.keys()}
         result = {**a, **b}
         print(result)
@@ -177,7 +262,7 @@ class Trainer:
         result_list = {k: [v] for k, v in result.items()}
         df = pd.DataFrame.from_dict(result_list)  # convert to datframe
 
-        results_path = os.path.join(self.config['project_path'], f"results/{self.config['run_name']}.csv")
+        results_path = os.path.join(self.config['project_path'], f"results/{self.config['run_name']}_{result_type}.csv")
         results_df = pd.read_csv(results_path)
         results_df = pd.concat((results_df, df), axis=0, ignore_index=True)
         results_df.to_csv(results_path)  # update results
