@@ -73,21 +73,26 @@ class Trainer:
     def update_hyps_temp(
         self,
         hyps_temp,
+        refs_temp,
         probs,
+        refs,
         hours_elapsed,
         category_ids,
     ):
         cutoff_2d, cutoff_5d, cutoff_13d = self.find_last_indices_with_value_type(hours_elapsed[0].tolist(), category_ids.tolist())
         try:
             if cutoff_2d != -1:
-                hyps_temp['2d'].append(probs[cutoff_2d,:])
+                hyps_temp['2d'].append(probs[cutoff_2d,:].detach().cpu().numpy())
+                refs_temp['2d'].append(refs)
             if cutoff_5d != -1:
-                hyps_temp['5d'].append(probs[cutoff_5d,:])
+                hyps_temp['5d'].append(probs[cutoff_5d,:].detach().cpu().numpy())
+                refs_temp['5d'].append(refs)
             if cutoff_13d != -1:
-                hyps_temp['13d'].append(probs[cutoff_13d,:])
+                hyps_temp['13d'].append(probs[cutoff_13d,:].detach().cpu().numpy())
+                refs_temp['13d'].append(refs)
         except:
             ipdb.set_trace()
-        return hyps_temp
+        return hyps_temp, refs_temp
 
     def validate_loop(self, validation_generator):
         self.model.eval()
@@ -96,6 +101,7 @@ class Trainer:
             hyps = []
             refs = []
             hyps_temp = {'2d': [], '5d': [],'13d': []}
+            refs_temp = {'2d': [], '5d': [],'13d': []}
             avail_doc_count = []
             print(f"Starting validation loop...")
             for t, data in enumerate(tqdm(validation_generator)):
@@ -108,8 +114,8 @@ class Trainer:
                 avail_docs = seq_ids.max().item() + 1
                 note_end_chunk_ids = data["note_end_chunk_ids"]
                 hours_elapsed = data["hours_elapsed"]
-
-
+                
+                # Nn, L
                 scores = self.model(
                     input_ids=input_ids.to(self.device, dtype=torch.long),
                     attention_mask=attention_mask.to(self.device, dtype=torch.long),
@@ -120,10 +126,10 @@ class Trainer:
                 probs = F.sigmoid(scores)
                 ids.append(data["hadm_id"][0].item())
                 avail_doc_count.append(avail_docs)
-                hyps.append(scores[-1, :].detach().cpu().numpy())
-                hyps_temp = self.update_hyps_temp(hyps_temp, probs, hours_elapsed, category_ids)
+                hyps.append(probs[-1, :].detach().cpu().numpy())
+                hyps_temp, refs_temp = self.update_hyps_temp(hyps_temp, refs_temp, probs, labels.detach().cpu().numpy(), hours_elapsed, category_ids)
                 refs.append(labels.detach().cpu().numpy())
-        return hyps, hyps_temp, refs
+        return hyps, hyps_temp, refs, refs_temp
 
     def train(
         self,
@@ -139,8 +145,9 @@ class Trainer:
 
         for e in range(training_args['TOTAL_COMPLETED_EPOCHS'], epochs):
             hyps = []
-            hyps_temp = {'2d': [], '5d': [],'13d': []}
             refs = []
+            hyps_temp = {'2d': [], '5d': [],'13d': []}
+            refs_temp = {'2d': [], '5d': [],'13d': []}
             for t, data in enumerate(tqdm(training_generator)):
                 labels = data["label"][0][: self.model.num_labels]
                 input_ids = data["input_ids"][0]
@@ -149,6 +156,7 @@ class Trainer:
                 category_ids = data["category_ids"][0]
                 note_end_chunk_ids = data["note_end_chunk_ids"]
                 hours_elapsed = data["hours_elapsed"]
+                hours_elapsed[0][0] = 0 # for DEBUGGING ONLY
                 with torch.cuda.amp.autocast(enabled=True) as autocast, torch.backends.cuda.sdp_kernel(enable_flash=False) as disable :
                 # with autocast():
                     scores = self.model(
@@ -167,8 +175,8 @@ class Trainer:
 
                     probs = F.sigmoid(scores)
                     hyps.append(probs[-1, :].detach().cpu().numpy())
-                    hyps_temp = self.update_hyps_temp(hyps_temp, probs, hours_elapsed, category_ids)
                     refs.append(labels.detach().cpu().numpy())
+                    hyps_temp, refs_temp = self.update_hyps_temp(hyps_temp, refs_temp, probs, labels.detach().cpu().numpy(), hours_elapsed, category_ids)
 
                     if ((t + 1) % grad_accumulation_steps == 0) or (
                         t + 1 == len(training_generator)
@@ -177,19 +185,18 @@ class Trainer:
                         self.scaler.update()
                         self.optimizer.zero_grad()
                         self.lr_scheduler.step()
-                # if t==1000:
-                #     break
+
             print("Starting evaluation...")
             print("Epoch: %d" % (training_args['TOTAL_COMPLETED_EPOCHS']))
             
-            val_hyps, val_hyps_temp, val_refs = self.validate_loop(validation_generator)
+            val_hyps, val_hyps_temp, val_refs, val_refs_temp = self.validate_loop(validation_generator)
             result = self.compute_and_save_results(hyps, refs, val_hyps, val_refs, mymetrics, training_args)
             if hyps_temp['2d'] != []:
-                result_2d = self.compute_and_save_results(hyps_temp['2d'], refs, val_hyps_temp['2d'], val_refs, mymetrics, training_args, result_type='2d')
+                result_2d = self.compute_and_save_results(hyps_temp['2d'], refs_temp['2d'], val_hyps_temp['2d'], val_refs_temp['2d'], mymetrics, training_args, result_type='2d')
             if hyps_temp['5d'] != []:
-                result_5d = self.compute_and_save_results(hyps_temp['5d'], refs, val_hyps_temp['5d'], val_refs, mymetrics, training_args, result_type='5d')
+                result_5d = self.compute_and_save_results(hyps_temp['5d'], refs_temp['5d'], val_hyps_temp['5d'], val_refs_temp['5d'], mymetrics, training_args, result_type='5d')
             if hyps_temp['13d'] != []:
-                result_13d = self.compute_and_save_results(hyps_temp['13d'], refs, val_hyps_temp['13d'], val_refs, mymetrics, training_args, result_type='13d')
+                result_13d = self.compute_and_save_results(hyps_temp['13d'], refs_temp['13d'], val_hyps_temp['13d'], val_refs_temp['13d'], mymetrics, training_args, result_type='13d')
 
             training_args['CURRENT_PATIENCE_COUNT'] += 1
             training_args['TOTAL_COMPLETED_EPOCHS'] += 1
