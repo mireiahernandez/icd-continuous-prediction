@@ -144,15 +144,19 @@ class CustomDataset(Dataset):
             # only take notes up to discharge summary, ignore posterior
             # notes, e.g. nursing reports, which are brief and made after
             # the patient has been discharged
-            last_ds = self.find_last_discharge_summary(category_ids)
-            delta = input_ids.shape[0] - last_ds - 1
-            input_ids = input_ids[-(self.max_chunks+delta) :last_ds+1]
-            attention_mask = attention_mask[-self.max_chunks :last_ds+1]
+            # last_ds = self.find_last_discharge_summary(category_ids)
+            # delta = input_ids.shape[0] - last_ds - 1
+            input_ids = input_ids[-self.max_chunks :]
+            attention_mask = attention_mask[-self.max_chunks :]
             seq_ids = torch.LongTensor(seq_ids)
             category_ids = torch.LongTensor(category_ids)
             seq_ids = seq_ids[-self.max_chunks :]
             category_ids = category_ids[-self.max_chunks :]
             hours_elapsed = hours_elapsed[-self.max_chunks:]
+            # try:
+            #     cutoffs = self.find_last_indices_with_value_type(hours_elapsed, category_ids) 
+            # except:
+            #     ipdb.set_trace()
 
         
         # store the final chunk of each note
@@ -183,3 +187,21 @@ class CustomDataset(Dataset):
             if cat == self.categories_mapping["Discharge summary"]:
                 last_ds = i
         return i
+        
+    def find_last_indices_with_value_type(self, floats, cat_types):
+        # Initialize variables to keep track of the last indices
+        cutoffs = {'2d': -1, '5d': -1, '13d': -1}
+
+        # Iterate through the list of floats and value_types
+        # 5 -> discharge summary
+        for i, (num, value_type) in enumerate(zip(floats, cat_types)):
+            if value_type != self.categories_mapping['Discharge summary']:
+                if num < 2*24:
+                    cutoffs['2d'] = i
+                if num < 5*24:
+                    cutoffs['5d'] = i
+                if num < 13*24:
+                    cutoffs['13d'] = i
+
+        # Return the last indices meeting the conditions or -1 if no such indices exist
+        return cutoffs
