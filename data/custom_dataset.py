@@ -153,10 +153,14 @@ class CustomDataset(Dataset):
             seq_ids = seq_ids[-self.max_chunks :]
             category_ids = category_ids[-self.max_chunks :]
             hours_elapsed = hours_elapsed[-self.max_chunks:]
-            # try:
-            #     cutoffs = self.find_last_indices_with_value_type(hours_elapsed, category_ids) 
-            # except:
-            #     ipdb.set_trace()
+            ## PROBLEM: IT IS ON A CHUNK LEVEL, NOT NOTE LEVEL!!!!!!!!!!!!!!!!
+            ## CHANGE THE ATTENTION MASK TO BE DONE AT EACH CHUNK AND SIMPLY STORE THE CHUNK ID
+            try:
+                # hours_elapsed[0] = 0
+                # category_ids[0] = 1
+                cutoffs = self.find_last_indices_with_value_type(hours_elapsed, category_ids) 
+            except:
+                ipdb.set_trace()
 
         
         # store the final chunk of each note
@@ -175,6 +179,7 @@ class CustomDataset(Dataset):
             "label": label,
             "hadm_id": hadm_id,
             "hours_elapsed": hours_elapsed,
+            "cutoffs": cutoffs
         }
     
     def find_last_discharge_summary(self, category_ids):
