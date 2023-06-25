@@ -23,6 +23,10 @@ if __name__ == "__main__":
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-n", "--num_chunks", type=int, help="number of chunks")
     parser.add_argument("-r", "--run_name", type=str, help="run name")
+    parser.add_argument("-r", "--max_epochs", type=int, help="number of max epochs")
+    parser.add_argument("-r", "--num_heads_labattn", type=int, help="number of heads for lab attention")
+    parser.add_argument("-r", "--patience_threshold", type=int, help="patience threshold")
+    
     args = parser.parse_args()
     args_config = vars(args)
 
@@ -58,10 +62,11 @@ if __name__ == "__main__":
         ,"use_category_embeddings": True
         ,"num_labels": 50
         ,"use_all_tokens": True
+        ,"num_heads_labattn": args_config['num_heads_labattn']
         ,"final_aggregation": "cls"
         ,"only_discharge_summary": False
-        ,"patience_threshold": 3
-        ,"max_epochs": 3
+        ,"patience_threshold": args_config['patience_threshold']
+        ,"max_epochs": args_config['max_epochs']
         ,"save_model": False
         ,"load_from_checkpoint": False
         ,"checkpoint_name": "Run_all_notes_last_second_transf"
@@ -106,8 +111,8 @@ if __name__ == "__main__":
     optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=0)
 
     steps_per_epoch = int(
-        np.ceil(len(training_generator) // config["grad_accumulation"])
-    )
+        np.ceil(len(training_generator) / config["grad_accumulation"])
+    ) 
 
     # steps_per_epoch = 1
     lr_scheduler = optim.lr_scheduler.OneCycleLR(
@@ -146,10 +151,14 @@ if __name__ == "__main__":
         training_args['CURRENT_PATIENCE_COUNT'] = checkpoint["current_patience_count"]
 
     else:
-        pd.DataFrame({}).to_csv(
-            os.path.join(config['project_path'], f"results/{config['run_name']}.csv")
-        )  # Create dummy csv because of GDrive bug
-
+        # pd.DataFrame({}).to_csv(
+        #     os.path.join(config['project_path'], f"results/{config['run_name']}.csv")
+        # )  # Create dummy csv because of GDrive bug
+        cutoff_times = ['all', '2d','5d','13d','noDS']
+        for time in cutoff_times:
+            pd.DataFrame({}).to_csv(
+                os.path.join(config['project_path'], f"results/{config['run_name']}_{time}.csv")
+            )  # Create dummy csv because of GDrive bug
     results = {}
 
         #################################################################################
