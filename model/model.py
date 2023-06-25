@@ -47,14 +47,15 @@ class LabelAttentionClassifier(nn.Module):
         return score.unsqueeze(0) # CHANGED THIS FOR DEBUGGING
 
 class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
-    def __init__(self, hidden_size, seq_len, num_labels, device):
+    def __init__(self, hidden_size, seq_len, num_labels, num_heads, device):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_labels = num_labels
+        self.num_heads = num_heads
         self.seq_len = seq_len
         self.device = device
 
-        self.multiheadattn = nn.MultiheadAttention(hidden_size, num_heads=1, batch_first=True)
+        self.multiheadattn = nn.MultiheadAttention(hidden_size, num_heads=num_heads, batch_first=True)
 
         self.label_queries = nn.parameter.Parameter(
             torch.normal(
@@ -75,7 +76,6 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         # temporal_encoding = Nn x (N x T) x hidden_size
         T = self.seq_len
         Nc = int(encoding.shape[0] / T)
-        Nn = len(note_end_chunk_ids)
         H = self.hidden_size
         Nl = self.num_labels
 
@@ -86,13 +86,13 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         # values shape: Nn, Nc*T, H
         # key padding mask: Nn, Nc*T (true if ignore)
         # output: N, L, H
-        mask = torch.ones(size=(Nn, Nc * T), dtype=torch.bool).to(device=self.device)
-        for i in range(Nn):
-            mask[i, : (note_end_chunk_ids[i] + 1) * T] = False
+        mask = torch.ones(size=(Nc, Nc * T), dtype=torch.bool).to(device=self.device)
+        for i in range(Nc):
+            mask[i, : (i + 1) * T] = False
         attn_output = self.multiheadattn.forward(
-            query = self.label_queries.repeat(Nn,1,1),
-            key = encoding.repeat(Nn, 1, 1),
-            value = encoding.repeat(Nn, 1, 1),
+            query = self.label_queries.repeat(Nc,1,1),
+            key = encoding.repeat(Nc, 1, 1),
+            value = encoding.repeat(Nc, 1, 1),
             key_padding_mask = mask,
             need_weights=False,
         )[0]
@@ -206,7 +206,7 @@ class Model(nn.Module):
             self.hidden_size, self.seq_len, self.num_labels, device=device
         )
         self.temp_label_multiheadattn = TemporalMultiHeadLabelAttentionClassifier(
-            self.hidden_size, self.seq_len, self.num_labels, device=device
+            self.hidden_size, self.seq_len, self.num_labels, self.num_heads, device=device
         )
 
     def _initialize_embeddings(self):
