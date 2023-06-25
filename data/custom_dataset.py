@@ -58,6 +58,20 @@ class CustomDataset(Dataset):
         change_points.append(i)
         return change_points
 
+    def _get_cutoffs(self, hours_elapsed, seq_ids, category_ids):
+        cutoffs = {'2d': -1, '5d': -1, '13d': -1, 'noDS': -1}
+        for hour, seq, cat in zip(hours_elapsed, seq_ids, category_ids):
+            if cat != 5:
+                if hour < 2*24:
+                    cutoffs['2d'] = seq
+                if hour < 5*24:
+                    cutoffs['5d'] = seq
+                if hour < 13*24:
+                    cutoffs['13d'] = seq
+                cutoffs['noDS'] = seq
+        return cutoffs
+
+
     def __getitem__(self, idx):
         data = self.notes_agg_df.iloc[idx]
 
@@ -85,9 +99,17 @@ class CustomDataset(Dataset):
                 )
             )
         )
+        hours_elapsed = np.array(
+            list(
+                itertools.chain.from_iterable(
+                    [
+                        [data.HOURS_ELAPSED[i]] * len(output[i]["input_ids"])
+                        for i in range(len(output))
+                    ]
+                )
+            )
+        )
 
-        # temporal data
-        hours_elapsed = data.HOURS_ELAPSED
         percent_elapsed = data.PERCENT_ELAPSED
         label = torch.FloatTensor(data.ICD9_CODE_BINARY)
 
@@ -145,11 +167,14 @@ class CustomDataset(Dataset):
         
         # store the final chunk of each note
         note_end_chunk_ids = self._get_note_end_chunk_ids(seq_ids)
+        # print(f"Seq ids before: {seq_ids}")
 
         seq_id_vals = torch.unique(seq_ids).tolist()
         seq_id_dict = {seq: idx for idx, seq in enumerate(seq_id_vals)}
         seq_ids = seq_ids.apply_(seq_id_dict.get)
-        
+        # print(f"Seq ids after: {seq_ids}")
+        cutoffs = self._get_cutoffs(hours_elapsed, seq_ids, category_ids)
+        # print(cutoffs)
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
@@ -159,4 +184,5 @@ class CustomDataset(Dataset):
             "label": label,
             "hadm_id": hadm_id,
             "hours_elapsed": hours_elapsed,
+            "cutoffs": cutoffs
         }
