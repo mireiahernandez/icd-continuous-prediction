@@ -23,10 +23,10 @@ if __name__ == "__main__":
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-n", "--num_chunks", type=int, help="number of chunks")
     parser.add_argument("-r", "--run_name", type=str, help="run name")
-    parser.add_argument("-r", "--max_epochs", type=int, help="number of max epochs")
-    parser.add_argument("-r", "--num_heads_labattn", type=int, help="number of heads for lab attention")
-    parser.add_argument("-r", "--patience_threshold", type=int, help="patience threshold")
-    
+    parser.add_argument("-m", "--max_epochs", type=int, help="number of max epochs")
+    parser.add_argument("-l", "--num_heads_labattn", type=int, help="number of heads for lab attention")
+    parser.add_argument("-p", "--patience_threshold", type=int, help="patience threshold")
+
     args = parser.parse_args()
     args_config = vars(args)
 
