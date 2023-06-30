@@ -58,20 +58,21 @@ class Trainer:
     ):
         self.model = self.model.to(device=self.device)  # move the model parameters to CPU/GPU
         self.model.train()  # put model to training mode
-        mymetrics = MyMetrics()
-
+        mymetrics = MyMetrics(debug=self.config["debug"])
+        print("evaluate temporal is ", self.config["evaluate_temporal"])
         for e in range(training_args['TOTAL_COMPLETED_EPOCHS'], epochs):
             hyps = []
-            hyps_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
-            refs_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
             refs = []
+            if self.config["evaluate_temporal"]:
+                hyps_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
+                refs_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
             for t, data in enumerate(tqdm(training_generator)):
                 labels = data["label"][0][: self.model.num_labels]
                 input_ids = data["input_ids"][0]
                 attention_mask = data["attention_mask"][0]
                 seq_ids = data["seq_ids"][0]
                 category_ids = data["category_ids"][0]
-                note_end_chunk_ids = data["note_end_chunk_ids"]
+                # note_end_chunk_ids = data["note_end_chunk_ids"]
                 cutoffs = data["cutoffs"]
                 with torch.cuda.amp.autocast(enabled=True) as autocast, torch.backends.cuda.sdp_kernel(enable_flash=False) as disable :
                 # with autocast():
@@ -80,7 +81,7 @@ class Trainer:
                         attention_mask=attention_mask.to(self.device, dtype=torch.long),
                         seq_ids=seq_ids.to(self.device, dtype=torch.long),
                         category_ids=category_ids.to(self.device, dtype=torch.long),
-                        note_end_chunk_ids=note_end_chunk_ids,
+                        # note_end_chunk_ids=note_end_chunk_ids,
                     )
 
                     loss = F.binary_cross_entropy_with_logits(
@@ -93,11 +94,13 @@ class Trainer:
                     # print(f"cutoffs: {cutoffs}")
                     hyps.append(probs[-1, :].detach().cpu().numpy())
                     refs.append(labels.detach().cpu().numpy())
-                    cutoff_times = ['2d','5d','13d','noDS']
-                    for time in cutoff_times:
-                        if cutoffs[time] != -1:
-                            hyps_temp[time].append(probs[cutoffs[time][0], :].detach().cpu().numpy())
-                            refs_temp[time].append(labels.detach().cpu().numpy())
+
+                    if self.config["evaluate_temporal"]:
+                        cutoff_times = ['2d','5d','13d','noDS']
+                        for time in cutoff_times:
+                            if cutoffs[time] != -1:
+                                hyps_temp[time].append(probs[cutoffs[time][0], :].detach().cpu().numpy())
+                                refs_temp[time].append(labels.detach().cpu().numpy())
 
                     # print(f"ccutoffs: {cutoffs}, hyprs_temp: {hyps_temp}")
                     if ((t + 1) % grad_accumulation_steps == 0) or (
@@ -111,9 +114,14 @@ class Trainer:
                 #     break
             print("Starting evaluation...")
             print("Epoch: %d" % (training_args['TOTAL_COMPLETED_EPOCHS']))
-            result = self.evaluate_and_save_results(
-                hyps, refs, hyps_temp, refs_temp, mymetrics, training_args, validation_generator
-            )
+            if self.config["evaluate_temporal"]:
+                 result = self.evaluate_and_save_results(
+                    hyps, refs, mymetrics, training_args, validation_generator, hyps_temp, refs_temp
+                )
+            else:
+                result = self.evaluate_and_save_results(
+                    hyps, refs, mymetrics, training_args, validation_generator
+                ) 
 
             training_args['CURRENT_PATIENCE_COUNT'] += 1
             training_args['TOTAL_COMPLETED_EPOCHS'] += 1
@@ -187,20 +195,22 @@ class Trainer:
 
         return result
 
-    def evaluate_and_save_results(self, hyps, refs, hyps_temp, refs_temp, mymetrics, training_args, validation_generator):
+    def evaluate_and_save_results(self, hyps, refs, mymetrics, training_args, validation_generator, hyps_temp=None, refs_temp=None):
         train_metrics = mymetrics.from_numpy(np.asarray(hyps), np.asarray(refs))
         cutoff_times = ['2d', '5d', '13d', 'noDS']
-        train_metrics_temp = {time: mymetrics.from_numpy(np.asarray(hyps_temp[time]), np.asarray(refs_temp[time])) for time in cutoff_times}
+        if self.config["evaluate_temporal"]:
+            train_metrics_temp = {time: mymetrics.from_numpy(np.asarray(hyps_temp[time]), np.asarray(refs_temp[time])) for time in cutoff_times}
         #print(train_metrics_temp)
         print(f"Calculating validation metrics with a val dataset of {len(validation_generator)}...")
         validation_metrics, validation_metrics_temp = evaluate(
-            mymetrics, self.model, validation_generator, self.device, optimise_threshold=True
+            mymetrics, self.model, validation_generator, self.device, evaluate_temporal=self.config["evaluate_temporal"], optimise_threshold=True
         )
         #print(validation_metrics_temp)
         result = self.save_results(train_metrics, validation_metrics, training_args, timeframe='all')
         print(result)
-        for time in cutoff_times:
-            _ = self.save_results(train_metrics_temp[time], validation_metrics_temp[time], training_args, timeframe=time)
+        if self.config["evaluate_temporal"]:
+            for time in cutoff_times:
+                _ = self.save_results(train_metrics_temp[time], validation_metrics_temp[time], training_args, timeframe=time)
 
 
         self.model.train()  # put model to training mode
