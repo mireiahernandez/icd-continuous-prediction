@@ -59,19 +59,20 @@ class CustomDataset(Dataset):
         change_points.append(i)
         return change_points
 
-    def _get_cutoffs(self, hours_elapsed, seq_ids, category_ids):
-        cutoffs = {'2d': -1, '5d': -1, '13d': -1, 'noDS': -1}
-        for hour, seq, cat in zip(hours_elapsed, seq_ids, category_ids):
+    def _get_cutoffs(self, hours_elapsed, category_ids):
+        cutoffs = {'2d': -1, '5d': -1, '13d': -1, 'noDS': -1, 'all': -1}
+        for i, (hour, cat) in enumerate(zip(hours_elapsed, category_ids)):
             if cat != 5:
                 if hour < 2*24:
-                    cutoffs['2d'] = seq
+                    cutoffs['2d'] = i
                 if hour < 5*24:
-                    cutoffs['5d'] = seq
+                    cutoffs['5d'] = i
                 if hour < 13*24:
-                    cutoffs['13d'] = seq
-                cutoffs['noDS'] = seq
+                    cutoffs['13d'] = i
+                cutoffs['noDS'] = i
+            # cutoffs['all'] = i
         return cutoffs
-
+    
     def _prepare_data_sample(self, idx):
         data = self.notes_agg_df.iloc[idx]
 
@@ -174,21 +175,21 @@ class CustomDataset(Dataset):
             category_ids = category_ids[-self.max_chunks :]
         
         # store the final chunk of each note
-        note_end_chunk_ids = self._get_note_end_chunk_ids(seq_ids)
+        # note_end_chunk_ids = self._get_note_end_chunk_ids(seq_ids)
         # print(f"Seq ids before: {seq_ids}")
 
         seq_id_vals = torch.unique(seq_ids).tolist()
         seq_id_dict = {seq: idx for idx, seq in enumerate(seq_id_vals)}
         seq_ids = seq_ids.apply_(seq_id_dict.get)
         # print(f"Seq ids after: {seq_ids}")
-        cutoffs = self._get_cutoffs(hours_elapsed, seq_ids, category_ids)
+        cutoffs = self._get_cutoffs(hours_elapsed, category_ids)
         # print(cutoffs)
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "seq_ids": seq_ids,
             "category_ids": category_ids,
-            "note_end_chunk_ids": note_end_chunk_ids,
+            # "note_end_chunk_ids": note_end_chunk_ids,
             "label": label,
             "hadm_id": hadm_id,
             "hours_elapsed": hours_elapsed,
