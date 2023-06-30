@@ -16,16 +16,24 @@ from torch.cuda.amp import GradScaler, autocast
 from training.trainer import Trainer
 import argparse
 
+def boolean_string(s):
+    if s not in {'False', 'True'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'True'
+
 if __name__ == "__main__":
     import torch.multiprocessing
     torch.multiprocessing.set_sharing_strategy('file_system')
     parser = argparse.ArgumentParser(description="Train model",
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-n", "--num_chunks", type=int, help="number of chunks")
-    parser.add_argument("-r", "--run_name", type=str, help="run name")
-    parser.add_argument("-m", "--max_epochs", type=int, help="number of max epochs")
-    parser.add_argument("-l", "--num_heads_labattn", type=int, help="number of heads for lab attention")
-    parser.add_argument("-p", "--patience_threshold", type=int, help="patience threshold")
+    parser.add_argument("-n", "--num_chunks", type=int, default=4, help="number of chunks")
+    parser.add_argument("-r", "--run_name", type=str, default="test", help="run name")
+    parser.add_argument("-m", "--max_epochs", type=int, default=20, help="number of max epochs")
+    parser.add_argument("-l", "--num_heads_labattn", type=int, default=1, help="number of heads for lab attention")
+    parser.add_argument("-p", "--patience_threshold", type=int, default=3, help="patience threshold")
+    parser.add_argument("-d", "--debug", type=boolean_string, default='False', help="whether to run model in debug mode")
+    parser.add_argument("-e", "--evaluate_temporal", type=boolean_string, default='True', help="whether to evaluate temporal")
+    parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='True', help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -70,8 +78,10 @@ if __name__ == "__main__":
         ,"save_model": False
         ,"load_from_checkpoint": False
         ,"checkpoint_name": "Run_all_notes_last_second_transf"
+        ,"evaluate_temporal": args_config['evaluate_temporal']
+        ,"use_multihead_attention": args_config['use_multihead_attention']
+        ,"debug": args_config['debug']
     }
-
     with open(os.path.join("", f"results/config_{config['run_name']}.json"), "w") as f:
         json.dump(config, f)
 
