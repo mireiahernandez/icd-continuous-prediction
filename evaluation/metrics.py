@@ -12,6 +12,9 @@ class MyMetrics:
     """ Custom metrics for ICD-9 code predictions.
     
     Code based on HTDC (Ng et al, 2022)"""
+    def __init__(self, debug=False):
+        self.debug = debug
+
     def _compute(self, hyps, refs, pred_cutoff=0.5):
         results = {}
 
@@ -30,22 +33,22 @@ class MyMetrics:
         results["f1_by_class"] = f1_score(
             refs.tolist(), preds.tolist(), average=None, zero_division=0
         )
+        if not self.debug:
+            results["auc_macro"] = roc_auc_score(
+                refs_for_auc.tolist(), hyps_for_auc.tolist(), average="macro"
+            )
+            results["auc_micro"] = roc_auc_score(
+                refs_for_auc.tolist(), hyps_for_auc.tolist(), average="micro"
+            )
+            results["auc_by_class"] = roc_auc_score(
+                refs_for_auc.tolist(), hyps_for_auc.tolist(), average=None
+            )
 
-        results["auc_macro"] = roc_auc_score(
-            refs_for_auc.tolist(), hyps_for_auc.tolist(), average="macro"
-        )
-        results["auc_micro"] = roc_auc_score(
-            refs_for_auc.tolist(), hyps_for_auc.tolist(), average="micro"
-        )
-        results["auc_by_class"] = roc_auc_score(
-            refs_for_auc.tolist(), hyps_for_auc.tolist(), average=None
-        )
+            results["p_5"] = self.precision_at_k(hyps, refs)
 
-        results["p_5"] = self.precision_at_k(hyps, refs)
-
-        results["LRAP"] = label_ranking_average_precision_score(
-            refs.tolist(), hyps.tolist()
-        )
+            results["LRAP"] = label_ranking_average_precision_score(
+                refs.tolist(), hyps.tolist()
+            )
         results["metrics_sample_size"] = len(hyps)
 
         return results
