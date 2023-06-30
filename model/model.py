@@ -54,7 +54,6 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         self.num_heads = num_heads
         self.seq_len = seq_len
         self.device = device
-
         self.multiheadattn = nn.MultiheadAttention(hidden_size, num_heads=num_heads, batch_first=True)
 
         self.label_queries = nn.parameter.Parameter(
@@ -70,7 +69,7 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
             requires_grad=True,
         )
 
-    def forward(self, encoding, note_end_chunk_ids):
+    def forward(self, encoding):
         # encoding: Tensor of size (Nc x T) x H
         # mask: Tensor of size Nn x (Nc x T) x H
         # temporal_encoding = Nn x (N x T) x hidden_size
@@ -199,15 +198,14 @@ class Model(nn.Module):
         self.transformer2 = nn.TransformerEncoder(
             self.transformer2_layer, num_layers=self.num_layers
         )
-
         # LWAN
-        self.label_attn = LabelAttentionClassifier(self.hidden_size, self.num_labels)
-        self.temp_label_attn = TemporalLabelAttentionClassifier(
-            self.hidden_size, self.seq_len, self.num_labels, device=device
-        )
-        self.temp_label_multiheadattn = TemporalMultiHeadLabelAttentionClassifier(
-            self.hidden_size, self.seq_len, self.num_labels, self.num_heads_labattn, device=device
-        )
+        if self.use_multihead_attention:
+            self.label_attn = TemporalMultiHeadLabelAttentionClassifier(
+                self.hidden_size, self.seq_len, self.num_labels, self.num_heads_labattn, device=device
+            )
+        else:
+            self.label_attn = LabelAttentionClassifier(self.hidden_size, self.num_labels)
+
 
     def _initialize_embeddings(self):
         self.pelookup = nn.parameter.Parameter(
@@ -245,7 +243,7 @@ class Model(nn.Module):
         attention_mask,
         seq_ids,
         category_ids,
-        note_end_chunk_ids,
+        note_end_chunk_ids=None,
         token_type_ids=None,
         **kwargs
     ):
@@ -291,7 +289,5 @@ class Model(nn.Module):
         # sequence_output_temp = self.temp_label_attn(
         #     sequence_output, note_end_chunk_ids
         # )  # apply label attention at token-level
-        sequence_output = self.temp_label_multiheadattn(
-            sequence_output, note_end_chunk_ids
-        )  # apply label attention at token-level
+        sequence_output = self.label_attn(sequence_output)  # apply label attention at token-level
         return sequence_output
