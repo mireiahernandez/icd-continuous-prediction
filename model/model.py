@@ -206,7 +206,7 @@ class Model(nn.Module):
             self.hidden_size, self.seq_len, self.num_labels, device=device
         )
         self.temp_label_multiheadattn = TemporalMultiHeadLabelAttentionClassifier(
-            self.hidden_size, self.seq_len, self.num_labels, self.num_heads, device=device
+            self.hidden_size, self.seq_len, self.num_labels, self.num_heads_labattn, device=device
         )
 
     def _initialize_embeddings(self):
