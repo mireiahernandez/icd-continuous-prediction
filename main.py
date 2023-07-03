@@ -32,8 +32,8 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--num_heads_labattn", type=int, default=1, help="number of heads for lab attention")
     parser.add_argument("-p", "--patience_threshold", type=int, default=3, help="patience threshold")
     parser.add_argument("-d", "--debug", type=boolean_string, default='False', help="whether to run model in debug mode")
-    parser.add_argument("-e", "--evaluate_temporal", type=boolean_string, default='True', help="whether to evaluate temporal")
-    parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='True', help="whether to use multihead attention")
+    parser.add_argument("-e", "--evaluate_temporal", type=boolean_string, default='False', help="whether to evaluate temporal")
+    parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='False', help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -48,8 +48,8 @@ if __name__ == "__main__":
     cpu = torch.device('cpu')
     print(device)
 
-    ### for debugging use cpu
-    #device = cpu
+    ## for debugging use cpu
+    # device = cpu
 
     config = {
     #    "run_name": "Run_test_TLWAN"
@@ -63,10 +63,10 @@ if __name__ == "__main__":
         ,"grad_accumulation": args_config['num_chunks']
         ,"use_positional_embeddings": True
         ,"use_reverse_positional_embeddings": True
-        ,"priority_mode": "Last"
+        ,"priority_mode": "None"
         ,"priority_idxs": [1]
-        ,"use_document_embeddings": True
-        ,"use_reverse_document_embeddings": True
+        ,"use_document_embeddings": False # TODO: change to True once the bug fix in the model is done
+        ,"use_reverse_document_embeddings": False # TODO: change to True once the bug fix is done
         ,"use_category_embeddings": True
         ,"num_labels": 50
         ,"use_all_tokens": True
