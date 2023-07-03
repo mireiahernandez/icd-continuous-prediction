@@ -237,7 +237,28 @@ class Model(nn.Module):
             torch.normal(0, 0.1, size=(15, 1, self.hidden_size), dtype=torch.float),
             requires_grad=True,
         )
-
+    def freeze_transformer(self):
+        # set embeddings to not require grad (or yes)
+        self.pelookup.requires_grad = False
+        self.reversepelookup.requires_grad = False
+        self.delookup.requires_grad = False
+        self.reversedelookup.requires_grad = False
+        self.celookup.requires_grad = False
+        # set transformer to not require grad
+        for param in self.transformer.parameters():
+            param.requires_grad = False
+    
+    def unfreeze_transformer(self):
+        # set embeddings to not require grad (or yes)
+        self.pelookup.requires_grad = True
+        self.reversepelookup.requires_grad = True
+        self.delookup.requires_grad = True
+        self.reversedelookup.requires_grad = True
+        self.celookup.requires_grad = True
+        # set transformer to not require grad
+        for param in self.transformer.parameters():
+            param.requires_grad = True  
+    
     def forward(
         self,
         input_ids,
@@ -249,19 +270,6 @@ class Model(nn.Module):
         gradient_selection=False,
         **kwargs
     ):
-        # if we are in chunk selection mode, set all the parameters up to label attention with requires_grad=False
-        # this is because we don't want to update them during training
-        if gradient_selection:
-            # set embeddings to not require grad
-            self.pelookup.requires_grad = False
-            self.reversepelookup.requires_grad = False
-            self.delookup.requires_grad = False
-            self.reversedelookup.requires_grad = False
-            self.celookup.requires_grad = False
-            # set transformer to not require grad
-            for param in self.transformer.parameters():
-                param.requires_grad = False
-
         max_seq_id = seq_ids[-1].item()
         reverse_seq_ids = max_seq_id - seq_ids
 
