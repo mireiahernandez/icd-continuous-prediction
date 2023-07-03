@@ -18,13 +18,17 @@ from tqdm import tqdm
 from torch.cuda.amp import GradScaler, autocast
 from evaluation.metrics import MyMetrics
 from evaluation.evaluate import evaluate
+from data.custom_dataset import OneSampleDataset
 import ipdb
+from torch.utils.data import DataLoader
+
 from transformers import (
     AutoModelForSequenceClassification,
     TrainingArguments,
     Trainer,
     AutoModel,
 )
+
 
 class Trainer:
     """ Custom trainer for icd-9 code prediction.
@@ -47,7 +51,36 @@ class Trainer:
         self.config = config
         self.device = device
         self.dtype = dtype
-        
+    
+    def select_documents(self, encoding_grads):
+        """ Select documents with largest gradients.
+        Args:
+            encoding_grads: gradients of the token encodings (shape: ((Nc x T) x D))
+        Returns:
+            document_mask: mask of documents to keep (shape: (Nc, T))
+        """
+        # Calculate gradient norms of encoding_grads along dimension 1 (i.e. along dimension D)
+        # shape (NcxT)
+        gradient_norms = torch.norm(encoding_grads, dim=1)
+        # Reshape gradient_norms to shape (Nc, T)
+        gradient_norms = gradient_norms.reshape((-1, 512))
+        # Calculate the mean gradient norm for each document
+        mean_gradient_norms = torch.mean(gradient_norms, dim=1) # shape (Nc)
+        # Select the top k documents with the largest mean gradient norm
+        # shape (self.config["max_chunks"])
+        topk = torch.topk(mean_gradient_norms, self.config["max_chunks"])
+        # Create a mask of documents to keep
+        # shape (Nc, T)
+        document_mask = torch.zeros_like(gradient_norms, dtype=torch.float32).cpu()
+        # Set the top k documents to 1
+        document_mask[topk.indices, :] = 1
+        # # Reshape document_mask to shape (NcxT, D)
+        # document_mask = document_mask.reshape((-1))
+        # # Expand document_mask to shape (NcxT, D)
+        # document_mask = document_mask[:, None].expand_as(encoding_grads)
+        return document_mask
+    
+
     def train(
         self,
         training_generator,
@@ -66,24 +99,71 @@ class Trainer:
             if self.config["evaluate_temporal"]:
                 hyps_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
                 refs_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
-            for t, data in enumerate(tqdm(training_generator)):
-                labels = data["label"][0][: self.model.num_labels]
-                input_ids = data["input_ids"][0]
-                attention_mask = data["attention_mask"][0]
-                seq_ids = data["seq_ids"][0]
-                category_ids = data["category_ids"][0]
+            for t, sample in enumerate(tqdm(training_generator)):
+                #--------> First pass through the model: obtain largest gradients
+                encoding_grads = []
+                one_sample_dataset = OneSampleDataset(sample)
+                one_sample_dataloader = DataLoader(one_sample_dataset, batch_size=self.config["max_chunks"], shuffle=False)
+
+                for j, data in enumerate(one_sample_dataloader):
+                    labels = data["label"][0,0,:50]
+                    input_ids = data["input_ids"]
+                    attention_mask = data["attention_mask"]
+                    seq_ids = data["seq_ids"]
+                    category_ids = data["category_ids"]
+                    # note_end_chunk_ids = data["note_end_chunk_ids"]
+                    cutoffs = data["cutoffs"]
+                    with torch.cuda.amp.autocast(enabled=True) as autocast, torch.backends.cuda.sdp_kernel(enable_flash=False) as disable :
+                    # with autocast():
+                    # with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+                        scores, token_encodings = self.model(
+                            input_ids=input_ids.to(self.device, dtype=torch.long),
+                            attention_mask=attention_mask.to(self.device, dtype=torch.long),
+                            seq_ids=seq_ids.to(self.device, dtype=torch.long),
+                            category_ids=category_ids.to(self.device, dtype=torch.long),
+                            # note_end_chunk_ids=note_end_chunk_ids,
+                            gradient_selection=True,
+                        )
+                        loss = F.binary_cross_entropy_with_logits(
+                            scores[-1, :][None, :], labels.to(self.device, dtype=self.dtype)[None, :]
+                        )
+
+                        self.scaler.scale(loss).backward()
+                        #**** GRADIENT SELECTION PART ****#
+                        encoding_grads.append(token_encodings.grad)
+
+                        # erase gradients
+                        self.optimizer.zero_grad()
+                #--------> Select documents with largest gradients
+                # concatenate encoding_grads along dimension 0 (i.e. along dimension NcxT)
+                encoding_grads = torch.cat(encoding_grads, dim=0)
+                document_mask = self.select_documents(encoding_grads)
+                # Second pass through the model: obtain predictions
+                # apply mask obtained through gradient selection
+                labels = sample["label"][0][: self.model.num_labels]
+                input_ids = sample["input_ids"][0] # Nc x 512
+                attention_mask = sample["attention_mask"][0] # Nc x 512
+                seq_ids = sample["seq_ids"][0] # Nc 
+                category_ids = sample["category_ids"][0] # Nc
                 # note_end_chunk_ids = data["note_end_chunk_ids"]
-                cutoffs = data["cutoffs"]
+                cutoffs = sample["cutoffs"]
+
+                # apply document mask to input_ids, attention_mask, seq_ids, category_ids
+                # retaining the same shape (2-dim)
+                input_ids = input_ids[document_mask.bool()].reshape((-1, 512))
+                attention_mask = attention_mask[document_mask.bool()].reshape((-1, 512))
+                seq_ids = seq_ids[document_mask.bool()[:,0]] # seq ids is 1-dim
+                category_ids = category_ids[document_mask.bool()[:,0]] # category ids is 1-dim
+
                 with torch.cuda.amp.autocast(enabled=True) as autocast, torch.backends.cuda.sdp_kernel(enable_flash=False) as disable :
                 # with autocast():
-                    scores = self.model(
+                    scores, token_encodings = self.model(
                         input_ids=input_ids.to(self.device, dtype=torch.long),
                         attention_mask=attention_mask.to(self.device, dtype=torch.long),
                         seq_ids=seq_ids.to(self.device, dtype=torch.long),
                         category_ids=category_ids.to(self.device, dtype=torch.long),
                         # note_end_chunk_ids=note_end_chunk_ids,
                     )
-
                     loss = F.binary_cross_entropy_with_logits(
                         scores[-1, :][None, :], labels.to(self.device, dtype=self.dtype)[None, :]
                     )
@@ -211,7 +291,6 @@ class Trainer:
         if self.config["evaluate_temporal"]:
             for time in cutoff_times:
                 _ = self.save_results(train_metrics_temp[time], validation_metrics_temp[time], training_args, timeframe=time)
-
 
         self.model.train()  # put model to training mode
 
