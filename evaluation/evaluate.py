@@ -27,17 +27,18 @@ def evaluate(
         avail_doc_count = []
         print(f"Starting validation loop...")
         for t, data in enumerate(tqdm(generator)):
+            # TODO: 2 passes for gradient selection
             labels = data["label"][0][: model.num_labels]
 
-            input_ids = data["input_ids"][0]
-            attention_mask = data["attention_mask"][0]
-            seq_ids = data["seq_ids"][0]
-            category_ids = data["category_ids"][0]
+            input_ids = data["input_ids"][0][-model.max_chunks:,:]
+            attention_mask = data["attention_mask"][0][-model.max_chunks:,:]
+            seq_ids = data["seq_ids"][0][-model.max_chunks:]
+            category_ids = data["category_ids"][0][-model.max_chunks:]
             avail_docs = seq_ids.max().item() + 1
             # note_end_chunk_ids = data["note_end_chunk_ids"]
             cutoffs = data["cutoffs"]
 
-            scores = model(
+            scores, _ = model(
                 input_ids=input_ids.to(device, dtype=torch.long),
                 attention_mask=attention_mask.to(device, dtype=torch.long),
                 seq_ids=seq_ids.to(device, dtype=torch.long),
