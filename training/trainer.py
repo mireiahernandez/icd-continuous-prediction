@@ -68,7 +68,8 @@ class Trainer:
         mean_gradient_norms = torch.mean(gradient_norms, dim=1) # shape (Nc)
         # Select the top k documents with the largest mean gradient norm
         # shape (self.config["max_chunks"])
-        topk = torch.topk(mean_gradient_norms, self.config["max_chunks"])
+        k = min(self.config["max_chunks"], mean_gradient_norms.shape[0])
+        topk = torch.topk(mean_gradient_norms, k)
         # Create a mask of documents to keep
         # shape (Nc, T)
         document_mask = torch.zeros_like(gradient_norms, dtype=torch.float32).cpu()
