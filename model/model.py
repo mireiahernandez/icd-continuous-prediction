@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import transformers
 import torch.nn.functional as F
+from torch.autograd import Variable
 import ipdb
 from transformers import (
     AutoModelForSequenceClassification,
@@ -245,49 +246,72 @@ class Model(nn.Module):
         category_ids,
         note_end_chunk_ids=None,
         token_type_ids=None,
+        gradient_selection=False,
         **kwargs
     ):
+        # if we are in chunk selection mode, set all the parameters up to label attention with requires_grad=False
+        # this is because we don't want to update them during training
+        if gradient_selection:
+            # set embeddings to not require grad
+            self.pelookup.requires_grad = False
+            self.reversepelookup.requires_grad = False
+            self.delookup.requires_grad = False
+            self.reversedelookup.requires_grad = False
+            self.celookup.requires_grad = False
+            # set transformer to not require grad
+            for param in self.transformer.parameters():
+                param.requires_grad = False
+
         max_seq_id = seq_ids[-1].item()
         reverse_seq_ids = max_seq_id - seq_ids
 
         chunk_count = input_ids.size()[0]
         reverse_pos_ids = (chunk_count - torch.arange(chunk_count) - 1).to(self.device)
 
-        sequence_output = self.transformer(input_ids, attention_mask).last_hidden_state
+        token_encodings = self.transformer(input_ids, attention_mask).last_hidden_state
+        # TODO: seq ids are wrong here, because they are not reset at the beginning of each batch
+        
         if self.use_positional_embeddings:
-            sequence_output += self.pelookup[: sequence_output.size()[0], :, :]
+            token_encodings += self.pelookup[: token_encodings.size()[0], :, :]
         if self.use_reverse_positional_embeddings:
-            sequence_output += torch.index_select(
+            token_encodings += torch.index_select(
                 self.reversepelookup, dim=0, index=reverse_pos_ids
             )
 
         if self.use_document_embeddings:
-            sequence_output += torch.index_select(self.delookup, dim=0, index=seq_ids)
+            try:
+                token_encodings += torch.index_select(self.delookup, dim=0, index=seq_ids)
+            except:
+                ipdb.set_trace()
         if self.use_reverse_document_embeddings:
-            sequence_output += torch.index_select(
+            token_encodings += torch.index_select(
                 self.reversedelookup, dim=0, index=reverse_seq_ids
             )
 
         if self.use_category_embeddings:
-            sequence_output += torch.index_select(
+            token_encodings += torch.index_select(
                 self.celookup, dim=0, index=category_ids
             )
         if self.use_all_tokens:
             # before: sequence_output shape [batchsize, seqlen, hiddensize] = [# chunks, 512, hidden size]
             # after: sequence_output shape [#chunks*512, 1, hidden size]
-            sequence_output = sequence_output.view(-1, 1, self.hidden_size)
+            token_encodings = token_encodings.view(-1, 1, self.hidden_size)
         else:
-            sequence_output = sequence_output[:, [0], :]
+            token_encodings = token_encodings[:, [0], :]
         if self.num_layers > 0:
-            sequence_output = self.transformer2(sequence_output)[:, 0, :]
+            token_encodings = self.transformer2(token_encodings)[:, 0, :]
+        # remove the singleton to get something of shape [#chunks*512, hidden_size]
         else:
-            sequence_output = sequence_output[
-                :, 0, :
-            ]  # remove the singleton to get something of shape [#chunks*512, hidden_size]
+            token_encodings = token_encodings[:, 0, :]  
         # note_end_chunk_ids = [0, 3]
         # sequence_output_notemp = self.label_attn(sequence_output) # apply label attention at token-level
         # sequence_output_temp = self.temp_label_attn(
         #     sequence_output, note_end_chunk_ids
         # )  # apply label attention at token-level
-        sequence_output = self.label_attn(sequence_output)  # apply label attention at token-level
-        return sequence_output
+
+        if gradient_selection:
+            # set sequence output at this point to require grad
+            token_encodings = Variable(token_encodings, requires_grad=True)
+    
+        scores = self.label_attn(token_encodings)  # apply label attention at token-level
+        return scores, token_encodings
