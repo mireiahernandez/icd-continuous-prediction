@@ -105,7 +105,7 @@ class Trainer:
                 encoding_grads = []
                 one_sample_dataset = OneSampleDataset(sample)
                 one_sample_dataloader = DataLoader(one_sample_dataset, batch_size=self.config["max_chunks"], shuffle=False)
-
+                self.model.freeze_transformer()
                 for j, data in enumerate(one_sample_dataloader):
                     labels = data["label"][0,0,:50]
                     input_ids = data["input_ids"]
@@ -141,6 +141,7 @@ class Trainer:
                 document_mask = self.select_documents(encoding_grads)
                 # Second pass through the model: obtain predictions
                 # apply mask obtained through gradient selection
+                self.model.unfreeze_transformer()   
                 labels = sample["label"][0][: self.model.num_labels]
                 input_ids = sample["input_ids"][0] # Nc x 512
                 attention_mask = sample["attention_mask"][0] # Nc x 512
