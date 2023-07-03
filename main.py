@@ -60,7 +60,7 @@ if __name__ == "__main__":
         ,"num_layers": 1
         ,"lr": 5e-5
         ,"max_chunks": args_config['num_chunks']
-        ,"grad_accumulation": args_config['num_chunks']
+        ,"grad_accumulation": 1
         ,"use_positional_embeddings": True
         ,"use_reverse_positional_embeddings": True
         ,"priority_mode": "None"
