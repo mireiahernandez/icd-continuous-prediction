@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import ast
+import json
 
 
 class DataProcessor:
@@ -17,8 +18,13 @@ class DataProcessor:
         if config["debug"]:
             self.notes_df = self.notes_df.sort_values(by='HADM_ID')[:3000]
         self.labels_df = pd.read_csv(
-            os.path.join(dataset_path, "splits/caml_splits.csv")
+            os.path.join(dataset_path, "splits/caml_splits_separated.csv")
         )
+        # open diagnosis vs procedure codes
+        with open(os.path.join(dataset_path, "diag_codes.json"), "r") as f:
+            self.diag_codes = json.load(f)
+        with open(os.path.join(dataset_path, "proc_codes.json"), "r") as f:
+            self.proc_codes = json.load(f)
         self.config = config
         self.filter_discharge_summary()
 
@@ -165,12 +171,23 @@ class DataProcessor:
         notes_agg_df["absolute_code"] = notes_agg_df["absolute_code"].apply(
             lambda x: ast.literal_eval(x)
         )
+        notes_agg_df["code_type"] = notes_agg_df["code_type"].apply(
+            lambda x: ast.literal_eval(x)
+        )
         code_counts = (
             notes_agg_df["absolute_code"]
             .apply(lambda x: pd.Series(x))
             .stack()
             .value_counts()
         )
+        codes = code_counts.index.tolist()
+        diag_indices = []
+        proc_indices = []
+        for i, code in enumerate(codes):
+            if code in self.diag_codes:
+                diag_indices.append(i)
+            elif code in self.proc_codes:
+                proc_indices.append(i)
 
         notes_agg_df["ICD9_CODE_BINARY"] = notes_agg_df["absolute_code"].apply(
             lambda x: self._multi_hot_encode(x, code_counts)
@@ -181,4 +198,4 @@ class DataProcessor:
 
         notes_agg_df = notes_agg_df[notes_agg_df.SPLIT.isna() != True]
 
-        return notes_agg_df
+        return notes_agg_df, diag_indices, proc_indices

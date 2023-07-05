@@ -44,7 +44,7 @@ class LabelAttentionClassifier(nn.Module):
         #probability = torch.sigmoid(score)
 
         #return probability
-        return score.unsqueeze(0) # CHANGED THIS FOR DEBUGGING
+        return attention_weights, score.unsqueeze(0) # CHANGED THIS FOR DEBUGGING
 
 class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
     def __init__(self, hidden_size, seq_len, num_labels, num_heads, device):

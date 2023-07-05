@@ -37,7 +37,7 @@ def evaluate(
             # note_end_chunk_ids = data["note_end_chunk_ids"]
             cutoffs = data["cutoffs"]
 
-            scores = model(
+            scores, _ = model(
                 input_ids=input_ids.to(device, dtype=torch.long),
                 attention_mask=attention_mask.to(device, dtype=torch.long),
                 seq_ids=seq_ids.to(device, dtype=torch.long),

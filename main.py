@@ -63,7 +63,8 @@ if __name__ == "__main__":
         ,"grad_accumulation": args_config['num_chunks']
         ,"use_positional_embeddings": True
         ,"use_reverse_positional_embeddings": True
-        ,"priority_mode": "Last"
+        ,"priority_mode": "None"
+        ,"filter_time": "2d"
         ,"priority_idxs": [1]
         ,"use_document_embeddings": True
         ,"use_reverse_document_embeddings": True
@@ -87,7 +88,7 @@ if __name__ == "__main__":
 
     # process and aggregate raw data
     dp = DataProcessor(dataset_path="dataset", config=config)
-    notes_agg_df = dp.aggregate_data()
+    notes_agg_df, diag_indices, proc_indices = dp.aggregate_data()
     
     # get tokenizer
     tokenizer = get_tokenizer(config["base_checkpoint"])
@@ -96,7 +97,8 @@ if __name__ == "__main__":
     dataset_config = {
         "max_chunks" : config["max_chunks"],
         "priority_mode" : config["priority_mode"],
-        "priority_idxs" : config["priority_idxs"]
+        "priority_idxs" : config["priority_idxs"],
+        "filter_time" : config["filter_time"],
     }
     training_set = get_dataset(notes_agg_df, "TRAIN", tokenizer = tokenizer, **dataset_config)
     training_generator = get_dataloader(training_set)
@@ -181,10 +183,22 @@ if __name__ == "__main__":
         device,
         dtype
     )
+    diag_indices_top_50 =  []
+    proc_indices_top_50 =  []
+    for index in diag_indices:
+        if index < 50:
+            diag_indices_top_50.append(index)
+    for index in proc_indices:
+        if index < 50:
+            proc_indices_top_50.append(index)
+
     trainer.train(
         training_generator,
         training_args,
         validation_generator,
         grad_accumulation_steps=config["grad_accumulation"],
         epochs=config["max_epochs"],
+        diag_indices = diag_indices_top_50,
+        proc_indices = proc_indices_top_50,
+
     )

@@ -9,8 +9,9 @@ def get_dataset(df,
                tokenizer,
                max_chunks,
                priority_mode = "Last",
-               priority_idxs = None):
-  return CustomDataset(df[df.SPLIT == split], tokenizer = tokenizer, max_chunks = max_chunks, priority_mode = priority_mode, priority_idxs = priority_idxs)
+               priority_idxs = None,
+               filter_time = "all"):
+  return CustomDataset(df[df.SPLIT == split], tokenizer = tokenizer, max_chunks = max_chunks, priority_mode = priority_mode, priority_idxs = priority_idxs, filter_time=filter_time)
 
 def get_dataloader(dataset):
   dataloader_params = {
