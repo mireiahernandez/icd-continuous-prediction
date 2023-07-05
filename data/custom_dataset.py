@@ -69,10 +69,10 @@ class CustomDataset(Dataset):
             if cat != 5:
                 if hour < 2*24:
                     cutoffs['2d'] = i
-                if hour < 5*24:
-                    cutoffs['5d'] = i
-                if hour < 13*24:
-                    cutoffs['13d'] = i
+                if hour < 6*24:
+                    cutoffs['6d'] = i
+                if hour < 14*24:
+                    cutoffs['14d'] = i
                 cutoffs['noDS'] = i
             # cutoffs['all'] = i
         return cutoffs
@@ -197,6 +197,7 @@ class CustomDataset(Dataset):
             cutoff = cutoffs[self.filter_time]
             first_chunk = max(0, cutoff-self.max_chunks+1)
             input_ids = input_ids[first_chunk : cutoff+1]
+
             attention_mask = attention_mask[first_chunk : cutoff+1]
             seq_ids = torch.LongTensor(seq_ids)
             category_ids = torch.LongTensor(category_ids)
