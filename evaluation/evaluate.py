@@ -14,15 +14,19 @@ def evaluate(
     pred_cutoff=0.5,
     evaluate_temporal=False,
     optimise_threshold=False,
+    diag_indices=None,
+    proc_indices=None,
 ):
     model.eval()
     with torch.no_grad():
         ids = []
         hyps = []
         refs = []
+        hyps_proc, hyps_diag, refs_proc, refs_diag = [], [], [], []
+
         if evaluate_temporal:
-            hyps_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
-            refs_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
+            hyps_temp ={'2d':[],'6d':[],'14d':[],'noDS':[]}
+            refs_temp ={'2d':[],'6d':[],'14d':[],'noDS':[]}
           
         avail_doc_count = []
         print(f"Starting validation loop...")
@@ -49,8 +53,13 @@ def evaluate(
             avail_doc_count.append(avail_docs)
             hyps.append(probs[-1, :].detach().cpu().numpy())
             refs.append(labels.detach().cpu().numpy())
+            hyps_proc.append(probs[-1, :].detach().cpu().numpy()[proc_indices])
+            refs_proc.append(labels.detach().cpu().numpy()[proc_indices])
+            hyps_diag.append(probs[-1, :].detach().cpu().numpy()[diag_indices])
+            refs_diag.append(labels.detach().cpu().numpy()[diag_indices])
+
             if evaluate_temporal:
-                cutoff_times = ['2d','5d','13d','noDS']
+                cutoff_times = ['2d','6d','14d','noDS']
                 for time in cutoff_times:
                     if cutoffs[time] != -1:
                         hyps_temp[time].append(probs[cutoffs[time][0], :].detach().cpu().numpy())
@@ -61,14 +70,13 @@ def evaluate(
                 np.asarray(hyps), np.asarray(refs)
             )
 
-        computed_results = mymetrics.from_numpy(
-            np.asarray(hyps), np.asarray(refs), pred_cutoff=pred_cutoff
-        )
-        val_metrics = mymetrics.from_numpy(np.asarray(hyps), np.asarray(refs))
+        val_metrics = mymetrics.from_numpy(np.asarray(hyps), np.asarray(refs), pred_cutoff=pred_cutoff)
+        val_metrics_proc = mymetrics.from_numpy(np.asarray(hyps_proc), np.asarray(refs_proc), pred_cutoff=pred_cutoff)
+        val_metrics_diag = mymetrics.from_numpy(np.asarray(hyps_diag), np.asarray(refs_diag), pred_cutoff=pred_cutoff)
         if evaluate_temporal:
-            cutoff_times = ['2d', '5d', '13d', 'noDS']
+            cutoff_times = ['2d', '6d', '14d', 'noDS']
             val_metrics_temp = {time: mymetrics.from_numpy(np.asarray(hyps_temp[time]), np.asarray(refs_temp[time])) for time in cutoff_times}
         else:
             val_metrics_temp = None
   
-    return val_metrics, val_metrics_temp
+    return val_metrics, val_metrics_proc, val_metrics_diag, val_metrics_temp
