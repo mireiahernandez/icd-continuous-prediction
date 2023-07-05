@@ -33,6 +33,7 @@ class MyMetrics:
         results["f1_by_class"] = f1_score(
             refs.tolist(), preds.tolist(), average=None, zero_division=0
         )
+        results["num_labels"] = hyps.shape[1]
         if not self.debug:
             results["auc_macro"] = roc_auc_score(
                 refs_for_auc.tolist(), hyps_for_auc.tolist(), average="macro"
