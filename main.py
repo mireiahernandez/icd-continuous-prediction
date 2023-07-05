@@ -34,6 +34,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--debug", type=boolean_string, default='False', help="whether to run model in debug mode")
     parser.add_argument("-e", "--evaluate_temporal", type=boolean_string, default='True', help="whether to evaluate temporal")
     parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='True', help="whether to use multihead attention")
+    parser.add_argument("-f", "--filter_time", type=str, default='all', help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -48,8 +49,8 @@ if __name__ == "__main__":
     cpu = torch.device('cpu')
     print(device)
 
-    ### for debugging use cpu
-    #device = cpu
+    ## for debugging use cpu
+    # device = cpu
 
     config = {
     #    "run_name": "Run_test_TLWAN"
@@ -64,10 +65,10 @@ if __name__ == "__main__":
         ,"use_positional_embeddings": True
         ,"use_reverse_positional_embeddings": True
         ,"priority_mode": "None"
-        ,"filter_time": "2d"
+        ,"filter_time": args_config['filter_time']
         ,"priority_idxs": [1]
-        ,"use_document_embeddings": True
-        ,"use_reverse_document_embeddings": True
+        ,"use_document_embeddings": False
+        ,"use_reverse_document_embeddings": False
         ,"use_category_embeddings": True
         ,"num_labels": 50
         ,"use_all_tokens": True
@@ -167,10 +168,12 @@ if __name__ == "__main__":
         #     os.path.join(config['project_path'], f"results/{config['run_name']}.csv")
         # )  # Create dummy csv because of GDrive bug
         cutoff_times = ['all', '2d','5d','13d','noDS']
+        evaluation_types = ['both', 'diag', 'proc']
         for time in cutoff_times:
-            pd.DataFrame({}).to_csv(
-                os.path.join(config['project_path'], f"results/{config['run_name']}_{time}.csv")
-            )  # Create dummy csv because of GDrive bug
+            for eval_type in evaluation_types:
+                pd.DataFrame({}).to_csv(
+                    os.path.join(config['project_path'], f"results/{config['run_name']}_{time}_{eval_type}.csv")
+                )  # Create dummy csv because of GDrive bug
     results = {}
 
         #################################################################################
