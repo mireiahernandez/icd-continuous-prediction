@@ -47,9 +47,10 @@ class LabelAttentionClassifier(nn.Module):
         return score.unsqueeze(0) # CHANGED THIS FOR DEBUGGING
 
 class DocumentAutoRegressor(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, num_categories):
         super().__init__()
         self.hidden_size = hidden_size
+        self.num_categories = num_categories
         self.transformer_layer = nn.TransformerEncoderLayer(
             d_model=self.hidden_size, nhead=1
         )
@@ -57,7 +58,7 @@ class DocumentAutoRegressor(nn.Module):
             self.transformer_layer, num_layers=1
         )
         self.linear = nn.Linear(self.hidden_size, self.hidden_size // 2)
-        self.linear2 = nn.Linear(self.hidden_size // 2, 11) # 11 is the number of categories
+        self.linear2 = nn.Linear(self.hidden_size // 2, num_categories+1) # 11 is the number of categories
 
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=1)
@@ -233,7 +234,7 @@ class Model(nn.Module):
             )
         else:
             self.label_attn = LabelAttentionClassifier(self.hidden_size, self.num_labels)
-        self.document_regressor = DocumentAutoRegressor(self.hidden_size)
+        self.document_regressor = DocumentAutoRegressor(self.hidden_size, self.num_categories)
 
 
     def _initialize_embeddings(self):

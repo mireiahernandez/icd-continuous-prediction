@@ -118,7 +118,8 @@ if __name__ == "__main__":
 
     # only to run on CPU
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+    
+    config["num_categories"] = len(categories_mapping)
     model = Model(config, device=device)
 
     optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=0)

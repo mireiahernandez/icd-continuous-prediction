@@ -39,7 +39,7 @@ class Trainer:
         config,
         device,
         dtype,
-        categories_mapping,
+        num_categories,
     ):
         self.model = model
         self.optimizer = optimizer
@@ -48,7 +48,6 @@ class Trainer:
         self.config = config
         self.device = device
         self.dtype = dtype
-        self.categories_mapping = categories_mapping
         
     def train(
         self,
@@ -83,12 +82,14 @@ class Trainer:
                         attention_mask=attention_mask.to(self.device, dtype=torch.long),
                         seq_ids=seq_ids.to(self.device, dtype=torch.long),
                         category_ids=category_ids.to(self.device, dtype=torch.long),
-                        num_categories = len(list(self.categories_mapping.keys()))
                         # note_end_chunk_ids=note_end_chunk_ids,
                     )
                     # remove first category, add "end of sequence" class
                     if len(category_ids) > 1:
-                        true_categories = F.one_hot(torch.concat([category_ids[1:], torch.tensor([10])]), num_classes=len(list(self.categories_mapping.keys())))
+                        true_categories = F.one_hot(
+                            torch.concat([category_ids[1:], torch.tensor([self.config["num_categories"]])]),
+                            num_classes=self.config["num_categories"]+1
+                        )
                         loss_aux = F.cross_entropy(
                             pred_categories, true_categories.to(self.device, dtype=self.dtype)
                         )
