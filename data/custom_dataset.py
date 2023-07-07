@@ -8,6 +8,7 @@ import ast
 import os
 import itertools
 from torch.utils.data import Dataset, DataLoader
+import ipdb
 
 class CustomDataset(Dataset):
     """ Custom dataset for icd-9 code prediction.
@@ -203,7 +204,6 @@ class CustomDataset(Dataset):
             category_ids = torch.LongTensor(category_ids)
             seq_ids = seq_ids[first_chunk : cutoff+1]
             category_ids = category_ids[first_chunk : cutoff+1]
-        
 
         return {
             "input_ids": input_ids,
