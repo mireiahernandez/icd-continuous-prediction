@@ -72,6 +72,8 @@ class Trainer:
                 hyps_temp ={'2d':[],'6d':[],'14d':[],'noDS':[]}
                 refs_temp ={'2d':[],'6d':[],'14d':[],'noDS':[]}
             for t, data in enumerate(tqdm(training_generator)):
+                if len(data["seq_ids"][0]) == 0:
+                    continue
                 labels = data["label"][0][: self.model.num_labels]
                 input_ids = data["input_ids"][0]
                 attention_mask = data["attention_mask"][0]

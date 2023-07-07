@@ -248,6 +248,7 @@ class Model(nn.Module):
         **kwargs
     ):
         max_seq_id = seq_ids[-1].item()
+
         reverse_seq_ids = max_seq_id - seq_ids
 
         chunk_count = input_ids.size()[0]
