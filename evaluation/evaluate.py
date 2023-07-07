@@ -31,6 +31,8 @@ def evaluate(
         avail_doc_count = []
         print(f"Starting validation loop...")
         for t, data in enumerate(tqdm(generator)):
+            if len(data["seq_ids"][0]) == 0:
+                continue
             labels = data["label"][0][: model.num_labels]
 
             input_ids = data["input_ids"][0]
