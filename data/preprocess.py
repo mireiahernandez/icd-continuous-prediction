@@ -25,10 +25,10 @@ class DataProcessor:
     def aggregate_data(self):
         """Preprocess data and aggregate."""
         notes_agg_df = self.aggregate_hadm_id()
-        notes_agg_df = self.add_category_information(notes_agg_df)
+        notes_agg_df, categories_mapping = self.add_category_information(notes_agg_df)
         notes_agg_df = self.add_temporal_information(notes_agg_df)
         notes_agg_df = self.add_multi_hot_encoding(notes_agg_df)
-        return notes_agg_df
+        return notes_agg_df, categories_mapping
 
     def filter_discharge_summary(self):
         """Filter only DS if needed.
@@ -133,7 +133,7 @@ class DataProcessor:
         notes_agg_df["CATEGORY_REVERSE_SEQID"] = notes_agg_df["CATEGORY_INDEX"].apply(
             self._get_reverse_seqid_by_category
         )
-        return notes_agg_df
+        return notes_agg_df, categories_mapping
 
     def _multi_hot_encode(self, codes, code_counts):
         """Return a multi hot encoded vector.

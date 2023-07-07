@@ -46,14 +46,41 @@ class LabelAttentionClassifier(nn.Module):
         #return probability
         return score.unsqueeze(0) # CHANGED THIS FOR DEBUGGING
 
+class DocumentAutoRegressor(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.transformer_layer = nn.TransformerEncoderLayer(
+            d_model=self.hidden_size, nhead=1
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            self.transformer_layer, num_layers=1
+        )
+        self.linear = nn.Linear(self.hidden_size, self.hidden_size // 2)
+        self.linear2 = nn.Linear(self.hidden_size // 2, 11) # 11 is the number of categories
+
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=1)
+    
+    def forward(self, document_encodings):
+        # flag is causal = True so that it cannot attend to future document embeddings
+        mask = nn.Transformer.generate_square_subsequent_mask(sz=document_encodings.shape[0])
+        decoded_documents = self.transformer_encoder(document_encodings, mask=mask).squeeze(1) # shape Nc x D
+        # predict next document category
+        decoded_documents = self.relu(self.linear(decoded_documents))
+        categories = self.softmax(self.linear2(decoded_documents))
+        return categories
+    
+
 class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
-    def __init__(self, hidden_size, seq_len, num_labels, num_heads, device):
+    def __init__(self, hidden_size, seq_len, num_labels, num_heads, device, all_tokens=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_labels = num_labels
         self.num_heads = num_heads
         self.seq_len = seq_len
         self.device = device
+        self.all_tokens = all_tokens
         self.multiheadattn = nn.MultiheadAttention(hidden_size, num_heads=num_heads, batch_first=True)
 
         self.label_queries = nn.parameter.Parameter(
@@ -69,11 +96,13 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
             requires_grad=True,
         )
 
-    def forward(self, encoding):
+    def forward(self, encoding, all_tokens=True):
         # encoding: Tensor of size (Nc x T) x H
         # mask: Tensor of size Nn x (Nc x T) x H
         # temporal_encoding = Nn x (N x T) x hidden_size
         T = self.seq_len
+        if not self.all_tokens:
+            T = 1 # only use the [CLS]-token representation
         Nc = int(encoding.shape[0] / T)
         H = self.hidden_size
         Nl = self.num_labels
@@ -100,7 +129,6 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
             attn_output * self.label_weights.unsqueeze(0).view(1, self.num_labels, self.hidden_size), dim=2
         )
         return score
-
 
 class TemporalLabelAttentionClassifier(nn.Module):
     def __init__(self, hidden_size, seq_len, num_labels, device):
@@ -201,10 +229,11 @@ class Model(nn.Module):
         # LWAN
         if self.use_multihead_attention:
             self.label_attn = TemporalMultiHeadLabelAttentionClassifier(
-                self.hidden_size, self.seq_len, self.num_labels, self.num_heads_labattn, device=device
+                self.hidden_size, self.seq_len, self.num_labels, self.num_heads_labattn, device=device, all_tokens=self.use_all_tokens
             )
         else:
             self.label_attn = LabelAttentionClassifier(self.hidden_size, self.num_labels)
+        self.document_regressor = DocumentAutoRegressor(self.hidden_size)
 
 
     def _initialize_embeddings(self):
@@ -289,5 +318,8 @@ class Model(nn.Module):
         # sequence_output_temp = self.temp_label_attn(
         #     sequence_output, note_end_chunk_ids
         # )  # apply label attention at token-level
+        
+        categories = self.document_regressor(sequence_output.view(-1, 1, self.hidden_size))      
+        
         sequence_output = self.label_attn(sequence_output)  # apply label attention at token-level
-        return sequence_output
+        return sequence_output, categories

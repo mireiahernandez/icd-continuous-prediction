@@ -26,6 +26,7 @@ if __name__ == "__main__":
     torch.multiprocessing.set_sharing_strategy('file_system')
     parser = argparse.ArgumentParser(description="Train model",
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    # TODO: update the help definitions
     parser.add_argument("-n", "--num_chunks", type=int, default=4, help="number of chunks")
     parser.add_argument("-r", "--run_name", type=str, default="test", help="run name")
     parser.add_argument("-m", "--max_epochs", type=int, default=20, help="number of max epochs")
@@ -34,6 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--debug", type=boolean_string, default='False', help="whether to run model in debug mode")
     parser.add_argument("-e", "--evaluate_temporal", type=boolean_string, default='True', help="whether to evaluate temporal")
     parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='True', help="whether to use multihead attention")
+    parser.add_argument("-w", "--weight_aux", type=float, default=0, help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -69,7 +71,7 @@ if __name__ == "__main__":
         ,"use_reverse_document_embeddings": True
         ,"use_category_embeddings": True
         ,"num_labels": 50
-        ,"use_all_tokens": True
+        ,"use_all_tokens": False
         ,"num_heads_labattn": args_config['num_heads_labattn']
         ,"final_aggregation": "cls"
         ,"only_discharge_summary": False
@@ -81,13 +83,14 @@ if __name__ == "__main__":
         ,"evaluate_temporal": args_config['evaluate_temporal']
         ,"use_multihead_attention": args_config['use_multihead_attention']
         ,"debug": args_config['debug']
+        ,"weight_aux": args_config['weight_aux']
     }
     with open(os.path.join("", f"results/config_{config['run_name']}.json"), "w") as f:
         json.dump(config, f)
 
     # process and aggregate raw data
     dp = DataProcessor(dataset_path="dataset", config=config)
-    notes_agg_df = dp.aggregate_data()
+    notes_agg_df, categories_mapping = dp.aggregate_data()
     
     # get tokenizer
     tokenizer = get_tokenizer(config["base_checkpoint"])
@@ -179,7 +182,8 @@ if __name__ == "__main__":
         lr_scheduler,
         config,
         device,
-        dtype
+        dtype,
+        categories_mapping
     )
     trainer.train(
         training_generator,

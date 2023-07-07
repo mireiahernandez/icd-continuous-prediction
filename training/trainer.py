@@ -38,7 +38,8 @@ class Trainer:
         lr_scheduler,
         config,
         device,
-        dtype
+        dtype,
+        categories_mapping,
     ):
         self.model = model
         self.optimizer = optimizer
@@ -47,6 +48,7 @@ class Trainer:
         self.config = config
         self.device = device
         self.dtype = dtype
+        self.categories_mapping = categories_mapping
         
     def train(
         self,
@@ -76,17 +78,27 @@ class Trainer:
                 cutoffs = data["cutoffs"]
                 with torch.cuda.amp.autocast(enabled=True) as autocast, torch.backends.cuda.sdp_kernel(enable_flash=False) as disable :
                 # with autocast():
-                    scores = self.model(
+                    scores, pred_categories = self.model(
                         input_ids=input_ids.to(self.device, dtype=torch.long),
                         attention_mask=attention_mask.to(self.device, dtype=torch.long),
                         seq_ids=seq_ids.to(self.device, dtype=torch.long),
                         category_ids=category_ids.to(self.device, dtype=torch.long),
+                        num_categories = len(list(self.categories_mapping.keys()))
                         # note_end_chunk_ids=note_end_chunk_ids,
                     )
-
-                    loss = F.binary_cross_entropy_with_logits(
+                    # remove first category, add "end of sequence" class
+                    if len(category_ids) > 1:
+                        true_categories = F.one_hot(torch.concat([category_ids[1:], torch.tensor([10])]), num_classes=len(list(self.categories_mapping.keys())))
+                        loss_aux = F.cross_entropy(
+                            pred_categories, true_categories.to(self.device, dtype=self.dtype)
+                        )
+                    else:
+                        loss_aux = 0
+                    loss_cls = F.binary_cross_entropy_with_logits(
                         scores[-1, :][None, :], labels.to(self.device, dtype=self.dtype)[None, :]
                     )
+                    print(loss_aux)
+                    loss = (1-self.config["weight_aux"])*loss_cls + self.config["weight_aux"]*loss_aux
                     self.scaler.scale(loss).backward()
                     # convert to probabilities
                     probs = F.sigmoid(scores)
