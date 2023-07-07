@@ -35,6 +35,8 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--evaluate_temporal", type=boolean_string, default='True', help="whether to evaluate temporal")
     parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='True', help="whether to use multihead attention")
     parser.add_argument("-f", "--filter_time", type=str, default='all', help="whether to use multihead attention")
+    parser.add_argument("-a", "--lr", type=float, default=5e-5, help="whether to use multihead attention")
+    parser.add_argument("-i", "--priority_mode", type=str, default="None", help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -59,12 +61,12 @@ if __name__ == "__main__":
         ,"base_checkpoint": os.path.join("", "RoBERTa-base-PM-M3-Voc-hf")
         ,"num_attention_heads": 1
         ,"num_layers": 1
-        ,"lr": 5e-5
+        ,"lr": args_config['lr']
         ,"max_chunks": args_config['num_chunks']
         ,"grad_accumulation": args_config['num_chunks']
         ,"use_positional_embeddings": True
         ,"use_reverse_positional_embeddings": True
-        ,"priority_mode": "None"
+        ,"priority_mode": args_config['priority_mode']
         ,"filter_time": args_config['filter_time']
         ,"priority_idxs": [1]
         ,"use_document_embeddings": False
