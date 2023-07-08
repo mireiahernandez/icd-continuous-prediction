@@ -66,11 +66,11 @@ class DocumentAutoRegressor(nn.Module):
     def forward(self, document_encodings):
         # flag is causal = True so that it cannot attend to future document embeddings
         mask = nn.Transformer.generate_square_subsequent_mask(sz=document_encodings.shape[0])
-        decoded_documents = self.transformer_encoder(document_encodings, mask=mask).squeeze(1) # shape Nc x D
+        document_encodings = self.transformer_encoder(document_encodings, mask=mask).squeeze(1) # shape Nc x 1 x D
         # predict next document category
-        decoded_documents = self.relu(self.linear(decoded_documents))
-        categories = self.softmax(self.linear2(decoded_documents))
-        return categories
+        categories = self.relu(self.linear(document_encodings))
+        categories = self.softmax(self.linear2(categories))
+        return document_encodings, categories
     
 
 class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
@@ -320,7 +320,8 @@ class Model(nn.Module):
         #     sequence_output, note_end_chunk_ids
         # )  # apply label attention at token-level
         
-        categories = self.document_regressor(sequence_output.view(-1, 1, self.hidden_size))      
+        # document regressor returns document embeddings and predicted categories
+        sequence_output, categories = self.document_regressor(sequence_output.view(-1, 1, self.hidden_size))      
         
         sequence_output = self.label_attn(sequence_output)  # apply label attention at token-level
         return sequence_output, categories
