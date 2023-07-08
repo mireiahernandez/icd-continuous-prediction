@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--evaluate_temporal", type=boolean_string, default='True', help="whether to evaluate temporal")
     parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='True', help="whether to use multihead attention")
     parser.add_argument("-w", "--weight_aux", type=float, default=0, help="whether to use multihead attention")
+    parser.add_argument("-z", "--num_layers", type=int, default=0, help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -59,7 +60,7 @@ if __name__ == "__main__":
         ,"project_path": '/vol/bitbucket/mh1022/temporal-modelling-icd'
         ,"base_checkpoint": os.path.join("", "RoBERTa-base-PM-M3-Voc-hf")
         ,"num_attention_heads": 1
-        ,"num_layers": 1
+        ,"num_layers": args_config['num_layers']
         ,"lr": 5e-5
         ,"max_chunks": args_config['num_chunks']
         ,"grad_accumulation": args_config['num_chunks']
