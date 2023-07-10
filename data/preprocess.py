@@ -28,8 +28,13 @@ class DataProcessor:
         notes_agg_df, categories_mapping = self.add_category_information(notes_agg_df)
         notes_agg_df = self.add_temporal_information(notes_agg_df)
         notes_agg_df = self.add_multi_hot_encoding(notes_agg_df)
+        notes_agg_df = self.prepare_setup(notes_agg_df)
         return notes_agg_df, categories_mapping
 
+    def prepare_setup(self, notes_agg_df):
+        """ Prepare notes depending on experiment set-up"""
+        return notes_agg_df
+    
     def filter_discharge_summary(self):
         """Filter only DS if needed.
         Based on HTDC
@@ -65,8 +70,32 @@ class DataProcessor:
             .agg({"TEXT": list, "CHARTDATE": list, "CHARTTIME": list, "CATEGORY": list})
         ).reset_index()
 
+        # Modify the TEXT, CHARTDATE, CHARTTIME, CATEGORY columns
+        # by limiting the list to include all elements until the first DS
+        # the apply function is used to apply the lambda function to each row
+        # and it should filter based on the CATEGORY column
+        notes_agg_df["TEXT"] = notes_agg_df[["TEXT", "CATEGORY"]].apply(
+            lambda x: x.TEXT[:x.CATEGORY.index("Discharge summary")+1] if "Discharge summary" in x.CATEGORY else x.TEXT,
+            axis = 1
+        )
+
+        notes_agg_df["CHARTDATE"] = notes_agg_df[["CHARTDATE", "CATEGORY"]].apply(
+            lambda x: x.CHARTDATE[:x.CATEGORY.index("Discharge summary")+1] if "Discharge summary" in x.CATEGORY else x.CHARTDATE,
+            axis = 1
+        )
+        notes_agg_df["CHARTTIME"] = notes_agg_df[["CHARTTIME", "CATEGORY"]].apply(
+            lambda x: x.CHARTTIME[:x.CATEGORY.index("Discharge summary")+1] if "Discharge summary" in x.CATEGORY else x.CHARTTIME,
+            axis = 1
+        )
+        notes_agg_df["CATEGORY"] = notes_agg_df["CATEGORY"].apply(
+            lambda x: x[:x.index("Discharge summary")+1] if "Discharge summary" in x else x,
+        )
+        ##################################################################
+
+        # Aggregate with the labels df
         notes_agg_df = notes_agg_df.merge(self.labels_df, on=["HADM_ID"], how="left")
 
+        # Keep only rows for top 50 ICD9 codes
         notes_agg_df = notes_agg_df[notes_agg_df.SPLIT_50.isna() != True]
         return notes_agg_df
 
