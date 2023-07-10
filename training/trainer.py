@@ -64,6 +64,7 @@ class Trainer:
         for e in range(training_args['TOTAL_COMPLETED_EPOCHS'], epochs):
             hyps = []
             refs = []
+            # hyps_aux, refs_aux = [], []
             if self.config["evaluate_temporal"]:
                 hyps_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
                 refs_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
@@ -93,6 +94,8 @@ class Trainer:
                         loss_aux = F.cross_entropy(
                             pred_categories, true_categories.to(self.device, dtype=self.dtype)
                         )
+                        # hyps_aux.append(pred_categories.detach().cpu().numpy())
+                        # refs_aux.append(true_categories.detach().cpu().numpy())
                     else:
                         loss_aux = 0
                     loss_cls = F.binary_cross_entropy_with_logits(
@@ -107,7 +110,6 @@ class Trainer:
                     # print(f"cutoffs: {cutoffs}")
                     hyps.append(probs[-1, :].detach().cpu().numpy())
                     refs.append(labels.detach().cpu().numpy())
-
                     if self.config["evaluate_temporal"]:
                         cutoff_times = ['2d','5d','13d','noDS']
                         for time in cutoff_times:
