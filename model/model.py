@@ -284,6 +284,7 @@ class Model(nn.Module):
         reverse_pos_ids = (chunk_count - torch.arange(chunk_count) - 1).to(self.device)
 
         sequence_output = self.transformer(input_ids, attention_mask).last_hidden_state
+
         if self.use_positional_embeddings:
             sequence_output += self.pelookup[: sequence_output.size()[0], :, :]
         if self.use_reverse_positional_embeddings:
