@@ -37,6 +37,8 @@ if __name__ == "__main__":
     parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='True', help="whether to use multihead attention")
     parser.add_argument("-w", "--weight_aux", type=float, default=0, help="whether to use multihead attention")
     parser.add_argument("-z", "--num_layers", type=int, default=0, help="whether to use multihead attention")
+    parser.add_argument("-s", "--setup", type=str, default="latest", help="whether to use multihead attention")
+    parser.add_argument("-i", "--limit_ds", type=int, default=0, help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -85,6 +87,8 @@ if __name__ == "__main__":
         ,"use_multihead_attention": args_config['use_multihead_attention']
         ,"debug": args_config['debug']
         ,"weight_aux": args_config['weight_aux']
+        ,"setup": args_config['setup']
+        ,"limit_ds": args_config['limit_ds']
     }
     with open(os.path.join("", f"results/config_{config['run_name']}.json"), "w") as f:
         json.dump(config, f)
@@ -99,8 +103,8 @@ if __name__ == "__main__":
     # Get training / validation / test
     dataset_config = {
         "max_chunks" : config["max_chunks"],
-        "priority_mode" : config["priority_mode"],
-        "priority_idxs" : config["priority_idxs"]
+        "setup" : config["setup"],
+        "limit_ds" : config["limit_ds"],
     }
     training_set = get_dataset(notes_agg_df, "TRAIN", tokenizer = tokenizer, **dataset_config)
     training_generator = get_dataloader(training_set)
