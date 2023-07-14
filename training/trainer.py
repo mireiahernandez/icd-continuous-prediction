@@ -62,12 +62,12 @@ class Trainer:
         mymetrics = MyMetrics(debug=self.config["debug"])
         print("evaluate temporal is ", self.config["evaluate_temporal"])
         for e in range(training_args['TOTAL_COMPLETED_EPOCHS'], epochs):
-            hyps = []
-            refs = []
-            # hyps_aux, refs_aux = [], []
+            preds = {"hyps": [], "refs": [], "hyps_aux": [], "refs_aux": []}
+            # add cls, aux, total keys to preds
+            train_loss = {'loss_cls':[],'loss_aux':[], 'loss_total':[]}
             if self.config["evaluate_temporal"]:
-                hyps_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
-                refs_temp ={'2d':[],'5d':[],'13d':[],'noDS':[]}
+                preds["hyps_temp"] ={'2d':[],'5d':[],'13d':[],'noDS':[]}
+                preds["refs_temp"] ={'2d':[],'5d':[],'13d':[],'noDS':[]}
             for t, data in enumerate(tqdm(training_generator)):
                 labels = data["label"][0][: self.model.num_labels]
                 input_ids = data["input_ids"][0]
@@ -86,7 +86,7 @@ class Trainer:
                         # note_end_chunk_ids=note_end_chunk_ids,
                     )
                     # remove first category, add "end of sequence" class
-                    if len(category_ids) > 1:
+                    if len(category_ids) > 1 and pred_categories is not None:
                         true_categories = F.one_hot(
                             torch.concat([category_ids[1:], torch.tensor([self.config["num_categories"]])]),
                             num_classes=self.config["num_categories"]+1
@@ -94,28 +94,31 @@ class Trainer:
                         loss_aux = F.cross_entropy(
                             pred_categories, true_categories.to(self.device, dtype=self.dtype)
                         )
-                        # hyps_aux.append(pred_categories.detach().cpu().numpy())
-                        # refs_aux.append(true_categories.detach().cpu().numpy())
+                        preds["hyps_aux"].append(pred_categories.detach().cpu().numpy())
+                        preds["refs_aux"].append(true_categories.detach().cpu().numpy())
                     else:
-                        loss_aux = 0
+                        loss_aux = torch.tensor(0)
                     loss_cls = F.binary_cross_entropy_with_logits(
                         scores[-1, :][None, :], labels.to(self.device, dtype=self.dtype)[None, :]
                     )
                     print(loss_aux)
                     loss = (1-self.config["weight_aux"])*loss_cls + self.config["weight_aux"]*loss_aux
                     self.scaler.scale(loss).backward()
+                    train_loss['loss_cls'].append(loss_cls.detach().cpu().numpy())
+                    train_loss['loss_aux'].append(loss_aux.detach().cpu().numpy())
+                    train_loss['loss_total'].append(loss.detach().cpu().numpy())
                     # convert to probabilities
                     probs = F.sigmoid(scores)
                     # print(f"probs shape: {probs.shape}")
                     # print(f"cutoffs: {cutoffs}")
-                    hyps.append(probs[-1, :].detach().cpu().numpy())
-                    refs.append(labels.detach().cpu().numpy())
+                    preds["hyps"].append(probs[-1, :].detach().cpu().numpy())
+                    preds["refs"].append(labels.detach().cpu().numpy())
                     if self.config["evaluate_temporal"]:
                         cutoff_times = ['2d','5d','13d','noDS']
                         for time in cutoff_times:
                             if cutoffs[time] != -1:
-                                hyps_temp[time].append(probs[cutoffs[time][0], :].detach().cpu().numpy())
-                                refs_temp[time].append(labels.detach().cpu().numpy())
+                                preds["hyps_temp"][time].append(probs[cutoffs[time][0], :].detach().cpu().numpy())
+                                preds["refs_temp"][time].append(labels.detach().cpu().numpy())
 
                     # print(f"ccutoffs: {cutoffs}, hyprs_temp: {hyps_temp}")
                     if ((t + 1) % grad_accumulation_steps == 0) or (
@@ -129,14 +132,9 @@ class Trainer:
                 #     break
             print("Starting evaluation...")
             print("Epoch: %d" % (training_args['TOTAL_COMPLETED_EPOCHS']))
-            if self.config["evaluate_temporal"]:
-                 result = self.evaluate_and_save_results(
-                    hyps, refs, mymetrics, training_args, validation_generator, hyps_temp, refs_temp
-                )
-            else:
-                result = self.evaluate_and_save_results(
-                    hyps, refs, mymetrics, training_args, validation_generator
-                ) 
+            result = self.evaluate_and_save_results(
+                preds, train_loss, mymetrics, training_args, validation_generator
+            )
 
             training_args['CURRENT_PATIENCE_COUNT'] += 1
             training_args['TOTAL_COMPLETED_EPOCHS'] += 1
@@ -181,7 +179,14 @@ class Trainer:
                 },
                 save_path,
             )
-    def save_results(self, train_metrics, validation_metrics, training_args, timeframe='all'):
+    def save_results(
+            self,
+            train_metrics,
+            validation_metrics,
+            training_args,
+            timeframe='all'):
+        """ Save resulting metrics (train and val) to csv.
+        The argument timeframe specifies the time frame used for evaluation."""
         a = {
             f"validation_{key}": validation_metrics[key]
             for key in validation_metrics.keys()
@@ -210,22 +215,40 @@ class Trainer:
 
         return result
 
-    def evaluate_and_save_results(self, hyps, refs, mymetrics, training_args, validation_generator, hyps_temp=None, refs_temp=None):
-        train_metrics = mymetrics.from_numpy(np.asarray(hyps), np.asarray(refs))
+    def evaluate_and_save_results(self, preds, train_loss, mymetrics, training_args, validation_generator):
+        """ Evaluate model on validation set and save results to csv."""
+        train_metrics = mymetrics.from_numpy(np.asarray(preds["hyps"]), np.asarray(preds["refs"]))
+        if not self.config["is_baseline"]:
+            train_metrics_aux = mymetrics.from_numpy(np.concatenate(preds["hyps_aux"]), np.concatenate(preds["refs_aux"]))
         cutoff_times = ['2d', '5d', '13d', 'noDS']
         if self.config["evaluate_temporal"]:
-            train_metrics_temp = {time: mymetrics.from_numpy(np.asarray(hyps_temp[time]), np.asarray(refs_temp[time])) for time in cutoff_times}
+            train_metrics_temp = {time: mymetrics.from_numpy(np.asarray(preds["hyps_temp"][time]), np.asarray(preds["refs_temp"][time])) for time in cutoff_times}
         #print(train_metrics_temp)
         print(f"Calculating validation metrics with a val dataset of {len(validation_generator)}...")
-        validation_metrics, validation_metrics_temp = evaluate(
-            mymetrics, self.model, validation_generator, self.device, evaluate_temporal=self.config["evaluate_temporal"], optimise_threshold=True
+        # TODO: set optimise_threshold to True
+        val_metrics, val_metrics_temp, val_metrics_aux = evaluate(
+            mymetrics,
+            self.model,
+            validation_generator,
+            self.device,
+            evaluate_temporal=self.config["evaluate_temporal"],
+            optimise_threshold=False,
+            num_categories = self.config["num_categories"],
+            is_baseline=self.config["is_baseline"],
         )
         #print(validation_metrics_temp)
-        result = self.save_results(train_metrics, validation_metrics, training_args, timeframe='all')
+        train_metrics["loss"] = np.mean(train_loss['loss_total'])
+        train_metrics["loss_aux"] = np.mean(train_loss['loss_aux'])
+        train_metrics["loss_cls"] = np.mean(train_loss['loss_cls'])
+        result = self.save_results(train_metrics, val_metrics, training_args, timeframe='all')
+        # save results of aux task
+        if not self.config["is_baseline"]:
+            _ = self.save_results(train_metrics_aux, val_metrics_aux, training_args, timeframe='all_aux')
         print(result)
+        # save results of temp task
         if self.config["evaluate_temporal"]:
             for time in cutoff_times:
-                _ = self.save_results(train_metrics_temp[time], validation_metrics_temp[time], training_args, timeframe=time)
+                _ = self.save_results(train_metrics_temp[time], val_metrics_temp[time], training_args, timeframe=time)
 
 
         self.model.train()  # put model to training mode
