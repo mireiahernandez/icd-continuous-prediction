@@ -41,40 +41,77 @@ class LabelAttentionClassifier(nn.Module):
         attention_value = encoding.T @ attention_weights  # hidden_size x num labels
 
         score = torch.sum(attention_value * self.label_weights, dim=0)  # num_labels
-        #probability = torch.sigmoid(score)
+        # probability = torch.sigmoid(score)
 
-        #return probability
-        return score.unsqueeze(0) # CHANGED THIS FOR DEBUGGING
+        # return probability
+        return score.unsqueeze(0)  # CHANGED THIS FOR DEBUGGING
+
 
 class DocumentAutoRegressor(nn.Module):
-    def __init__(self, hidden_size, num_categories):
+    def __init__(self, hidden_size):
         super().__init__()
         self.hidden_size = hidden_size
-        self.num_categories = num_categories
         self.transformer_layer = nn.TransformerEncoderLayer(
             d_model=self.hidden_size, nhead=1
         )
         self.transformer_encoder = nn.TransformerEncoder(
             self.transformer_layer, num_layers=1
         )
+
+    def forward(self, document_encodings):
+        # flag is causal = True so that it cannot attend to future document embeddings
+        mask = nn.Transformer.generate_square_subsequent_mask(
+            sz=document_encodings.shape[0]
+        )
+        document_encodings = self.transformer_encoder(
+            document_encodings, mask=mask
+        ).squeeze(
+            1
+        )  # shape Nc x 1 x D
+
+        return document_encodings
+
+
+class NextDocumentCategoryPredictor(nn.Module):
+    def __init__(self, hidden_size, num_categories):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_categories = num_categories
         self.linear = nn.Linear(self.hidden_size, self.hidden_size // 2)
-        self.linear2 = nn.Linear(self.hidden_size // 2, num_categories+1) # 11 is the number of categories
+        self.linear2 = nn.Linear(
+            self.hidden_size // 2, num_categories + 1
+        )  # 11 is the number of categories
 
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=1)
-    
+
     def forward(self, document_encodings):
-        # flag is causal = True so that it cannot attend to future document embeddings
-        mask = nn.Transformer.generate_square_subsequent_mask(sz=document_encodings.shape[0])
-        document_encodings = self.transformer_encoder(document_encodings, mask=mask).squeeze(1) # shape Nc x 1 x D
         # predict next document category
         categories = self.relu(self.linear(document_encodings))
         categories = self.softmax(self.linear2(categories))
-        return document_encodings, categories
-    
+        return categories
+
+
+class NextDocumentEmbeddingPredictor(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.linear = nn.Linear(self.hidden_size, self.hidden_size // 2)
+        self.relu1 = nn.ReLU()
+        self.linear2 = nn.Linear(self.hidden_size // 2, self.hidden_size)
+        self.relu2 = nn.ReLU()
+
+    def forward(self, document_encodings):
+        # predict next document embedding
+        next_document_encodings = self.relu1(self.linear(document_encodings))
+        next_document_encodings = self.linear2(document_encodings)
+        return next_document_encodings
+
 
 class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
-    def __init__(self, hidden_size, seq_len, num_labels, num_heads, device, all_tokens=True):
+    def __init__(
+        self, hidden_size, seq_len, num_labels, num_heads, device, all_tokens=True
+    ):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_labels = num_labels
@@ -82,7 +119,9 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         self.seq_len = seq_len
         self.device = device
         self.all_tokens = all_tokens
-        self.multiheadattn = nn.MultiheadAttention(hidden_size, num_heads=num_heads, batch_first=True)
+        self.multiheadattn = nn.MultiheadAttention(
+            hidden_size, num_heads=num_heads, batch_first=True
+        )
 
         self.label_queries = nn.parameter.Parameter(
             torch.normal(
@@ -103,7 +142,7 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         # temporal_encoding = Nn x (N x T) x hidden_size
         T = self.seq_len
         if not self.all_tokens:
-            T = 1 # only use the [CLS]-token representation
+            T = 1  # only use the [CLS]-token representation
         Nc = int(encoding.shape[0] / T)
         H = self.hidden_size
         Nl = self.num_labels
@@ -119,94 +158,29 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         for i in range(Nc):
             mask[i, : (i + 1) * T] = False
         attn_output = self.multiheadattn.forward(
-            query = self.label_queries.repeat(Nc,1,1),
-            key = encoding.repeat(Nc, 1, 1),
-            value = encoding.repeat(Nc, 1, 1),
-            key_padding_mask = mask,
+            query=self.label_queries.repeat(Nc, 1, 1),
+            key=encoding.repeat(Nc, 1, 1),
+            value=encoding.repeat(Nc, 1, 1),
+            key_padding_mask=mask,
             need_weights=False,
         )[0]
 
         score = torch.sum(
-            attn_output * self.label_weights.unsqueeze(0).view(1, self.num_labels, self.hidden_size), dim=2
-        )
-        return score
-
-class TemporalLabelAttentionClassifier(nn.Module):
-    def __init__(self, hidden_size, seq_len, num_labels, device):
-        super().__init__()
-
-        self.hidden_size = hidden_size
-        self.num_labels = num_labels
-        self.seq_len = seq_len
-        self.device = device
-
-        self.label_queries = nn.parameter.Parameter(
-            torch.normal(
-                0, 0.1, size=(self.hidden_size, self.num_labels), dtype=torch.float
+            attn_output
+            * self.label_weights.unsqueeze(0).view(
+                1, self.num_labels, self.hidden_size
             ),
-            requires_grad=True,
+            dim=2,
         )
-        self.label_weights = nn.parameter.Parameter(
-            torch.normal(
-                0, 0.1, size=(self.hidden_size, self.num_labels), dtype=torch.float
-            ),
-            requires_grad=True,
-        )
-
-    def forward(self, encoding, note_end_chunk_ids):
-        # encoding: Tensor of size (Nc x T) x H
-        # mask: Tensor of size Nn x (Nc x T) x H
-        # temporal_encoding = Nn x (N x T) x hidden_size
-        T = self.seq_len
-        Nc = int(encoding.shape[0] / T)
-        Nn = len(note_end_chunk_ids)
-        H = self.hidden_size
-        Nl = self.num_labels
-
-        mask = torch.zeros(size=(Nn, Nc * T)).to(device=self.device)
-        for i in range(Nn):
-            if i+1 < Nn:
-                mask[i+1, : (note_end_chunk_ids[i] + 1) * T] = float("-inf")
-        ###### FIX IT IS NOT note_end_chunk_ids we need to mulitply by T !!!!!!!!!!!!!!!!!!!!!!!!!
-
-        # shape Nn x H x Nc*T
-        # (Nn x NcT x 1) x (1 x NcT x H) -
-        # temporal_encoding = torch.mul(mask.unsqueeze(2), encoding.unsqueeze(0)) # Nn x NcT x H
-        # encoding ((Nc x T) x H) x label queries (H x Nl) = ((NcxT) x Nl)
-        # print(f"encoding: {encoding.shape}, note_end_chunk_ids: {note_end_chunk_ids}, mask: {mask}")
-        attention_scores = encoding @ self.label_queries
-
-        # mask attention scores: Nn x NcxT x Nl
-        attention_scores = attention_scores.unsqueeze(0) + mask.unsqueeze(2)
-
-        # shape Nn x Nc*T x Nl
-        attention_weights = F.softmax(attention_scores, dim=0)
-
-        # shape Nn x Nl x H
-        attention_values = attention_weights.view(Nn, Nl, Nc * T) @ encoding.view(
-            Nc * T, H
-        )
-        # attention_value = torch.bmm(
-        #     encoding.view(Nn,H,Nc*T),
-        #     attention_weights.view(Nn,Nc*T,Nl)
-        # )
-
-        # shape (Nn, Nl)
-        # label weights (H, Nl)
-        score = torch.sum(
-            attention_values * self.label_weights.unsqueeze(0).view(1, Nl, H), dim=2
-        )  # num_labels
-        # shape (Nn, Nl)
-        # probability = torch.sigmoid(score)
-        # return probability
         return score
 
 
 class Model(nn.Module):
-    """ Model for ICD-9 code temporal predictions.
-    
+    """Model for ICD-9 code temporal predictions.
+
     Model based on HTDC (Ng et al, 2022), with the original
     contribution of adding the temporal aspect."""
+
     def __init__(self, config, device):
         super().__init__()
         for key in config:
@@ -230,12 +204,28 @@ class Model(nn.Module):
         # LWAN
         if self.use_multihead_attention:
             self.label_attn = TemporalMultiHeadLabelAttentionClassifier(
-                self.hidden_size, self.seq_len, self.num_labels, self.num_heads_labattn, device=device, all_tokens=self.use_all_tokens
+                self.hidden_size,
+                self.seq_len,
+                self.num_labels,
+                self.num_heads_labattn,
+                device=device,
+                all_tokens=self.use_all_tokens,
             )
         else:
-            self.label_attn = LabelAttentionClassifier(self.hidden_size, self.num_labels)
-        self.document_regressor = DocumentAutoRegressor(self.hidden_size, self.num_categories)
-
+            self.label_attn = LabelAttentionClassifier(
+                self.hidden_size, self.num_labels
+            )
+        self.document_regressor = DocumentAutoRegressor(self.hidden_size)
+        if self.auxiliary_task == "next_document_embedding":
+            self.document_predictor = NextDocumentEmbeddingPredictor(self.hidden_size)
+        elif self.auxiliary_task == "next_document_category":
+            self.category_predictor = NextDocumentCategoryPredictor(
+                self.hidden_size, self.num_categories
+            )
+        elif self.auxiliary_task != "none":
+            raise ValueError(
+                "auxiliary_task must be next_document_embedding or next_document_category or none"
+            )
 
     def _initialize_embeddings(self):
         self.pelookup = nn.parameter.Parameter(
@@ -320,11 +310,22 @@ class Model(nn.Module):
         # sequence_output_temp = self.temp_label_attn(
         #     sequence_output, note_end_chunk_ids
         # )  # apply label attention at token-level
-        
+
+        # if not baseline, add document autoregressor
         if not self.is_baseline:
             # document regressor returns document embeddings and predicted categories
-            sequence_output, categories = self.document_regressor(sequence_output.view(-1, 1, self.hidden_size))      
-        else:
-            categories = None
-        sequence_output = self.label_attn(sequence_output)  # apply label attention at token-level
-        return sequence_output, categories
+            sequence_output = self.document_regressor(
+                sequence_output.view(-1, 1, self.hidden_size)
+            )
+        # make aux predictions
+        if self.auxiliary_task == "next_document_embedding":
+            aux_predictions = self.document_predictor(sequence_output)
+        elif self.auxiliary_task == "next_document_category":
+            aux_predictions = self.category_predictor(sequence_output)
+        elif self.auxiliary_task == "none":
+            aux_predictions = None
+        # apply label attention at document-level
+        sequence_output = self.label_attn(
+            sequence_output
+        )  # apply label attention at token-level
+        return sequence_output, aux_predictions
