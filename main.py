@@ -39,6 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("-z", "--num_layers", type=int, default=0, help="whether to use multihead attention")
     parser.add_argument("-s", "--setup", type=str, default="latest", help="whether to use multihead attention")
     parser.add_argument("-i", "--limit_ds", type=int, default=0, help="whether to use multihead attention")
+    parser.add_argument("-b", "--is_baseline", type=boolean_string, default=False, help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -89,6 +90,7 @@ if __name__ == "__main__":
         ,"weight_aux": args_config['weight_aux']
         ,"setup": args_config['setup']
         ,"limit_ds": args_config['limit_ds']
+        ,"is_baseline": args_config['is_baseline']
     }
     with open(os.path.join("", f"results/config_{config['run_name']}.json"), "w") as f:
         json.dump(config, f)
@@ -173,7 +175,7 @@ if __name__ == "__main__":
         # pd.DataFrame({}).to_csv(
         #     os.path.join(config['project_path'], f"results/{config['run_name']}.csv")
         # )  # Create dummy csv because of GDrive bug
-        cutoff_times = ['all', '2d','5d','13d','noDS']
+        cutoff_times = ['all', '2d','5d','13d','noDS','all_aux']
         for time in cutoff_times:
             pd.DataFrame({}).to_csv(
                 os.path.join(config['project_path'], f"results/{config['run_name']}_{time}.csv")
