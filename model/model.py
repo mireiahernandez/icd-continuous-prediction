@@ -321,8 +321,10 @@ class Model(nn.Module):
         #     sequence_output, note_end_chunk_ids
         # )  # apply label attention at token-level
         
-        # document regressor returns document embeddings and predicted categories
-        sequence_output, categories = self.document_regressor(sequence_output.view(-1, 1, self.hidden_size))      
-        
+        if not self.is_baseline:
+            # document regressor returns document embeddings and predicted categories
+            sequence_output, categories = self.document_regressor(sequence_output.view(-1, 1, self.hidden_size))      
+        else:
+            categories = None
         sequence_output = self.label_attn(sequence_output)  # apply label attention at token-level
         return sequence_output, categories
