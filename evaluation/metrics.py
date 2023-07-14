@@ -7,11 +7,11 @@ from sklearn.metrics import (
 )
 
 
-
 class MyMetrics:
-    """ Custom metrics for ICD-9 code predictions.
-    
+    """Custom metrics for ICD-9 code predictions.
+
     Code based on HTDC (Ng et al, 2022)"""
+
     def __init__(self, debug=False):
         self.debug = debug
 

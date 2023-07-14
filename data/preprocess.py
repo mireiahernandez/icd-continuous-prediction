@@ -12,10 +12,10 @@ class DataProcessor:
     The contributions of this work is to add the temporal information.
     """
 
-    def __init__(self, dataset_path, config):        
+    def __init__(self, dataset_path, config):
         self.notes_df = pd.read_csv(os.path.join(dataset_path, "NOTEEVENTS.csv"))
         if config["debug"]:
-            self.notes_df = self.notes_df.sort_values(by='HADM_ID')[:3000]
+            self.notes_df = self.notes_df.sort_values(by="HADM_ID")[:3000]
         self.labels_df = pd.read_csv(
             os.path.join(dataset_path, "splits/caml_splits.csv")
         )
@@ -32,9 +32,9 @@ class DataProcessor:
         return notes_agg_df, categories_mapping
 
     def prepare_setup(self, notes_agg_df):
-        """ Prepare notes depending on experiment set-up"""
+        """Prepare notes depending on experiment set-up"""
         return notes_agg_df
-    
+
     def filter_discharge_summary(self):
         """Filter only DS if needed.
         Based on HTDC
@@ -75,20 +75,28 @@ class DataProcessor:
         # the apply function is used to apply the lambda function to each row
         # and it should filter based on the CATEGORY column
         notes_agg_df["TEXT"] = notes_agg_df[["TEXT", "CATEGORY"]].apply(
-            lambda x: x.TEXT[:x.CATEGORY.index("Discharge summary")+1] if "Discharge summary" in x.CATEGORY else x.TEXT,
-            axis = 1
+            lambda x: x.TEXT[: x.CATEGORY.index("Discharge summary") + 1]
+            if "Discharge summary" in x.CATEGORY
+            else x.TEXT,
+            axis=1,
         )
 
         notes_agg_df["CHARTDATE"] = notes_agg_df[["CHARTDATE", "CATEGORY"]].apply(
-            lambda x: x.CHARTDATE[:x.CATEGORY.index("Discharge summary")+1] if "Discharge summary" in x.CATEGORY else x.CHARTDATE,
-            axis = 1
+            lambda x: x.CHARTDATE[: x.CATEGORY.index("Discharge summary") + 1]
+            if "Discharge summary" in x.CATEGORY
+            else x.CHARTDATE,
+            axis=1,
         )
         notes_agg_df["CHARTTIME"] = notes_agg_df[["CHARTTIME", "CATEGORY"]].apply(
-            lambda x: x.CHARTTIME[:x.CATEGORY.index("Discharge summary")+1] if "Discharge summary" in x.CATEGORY else x.CHARTTIME,
-            axis = 1
+            lambda x: x.CHARTTIME[: x.CATEGORY.index("Discharge summary") + 1]
+            if "Discharge summary" in x.CATEGORY
+            else x.CHARTTIME,
+            axis=1,
         )
         notes_agg_df["CATEGORY"] = notes_agg_df["CATEGORY"].apply(
-            lambda x: x[:x.index("Discharge summary")+1] if "Discharge summary" in x else x,
+            lambda x: x[: x.index("Discharge summary") + 1]
+            if "Discharge summary" in x
+            else x,
         )
         ##################################################################
 

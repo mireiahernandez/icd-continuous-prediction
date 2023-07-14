@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 import torch
@@ -9,16 +8,18 @@ import os
 import itertools
 from torch.utils.data import Dataset, DataLoader
 
+
 class CustomDataset(Dataset):
-    """ Custom dataset for icd-9 code prediction.
-    
+    """Custom dataset for icd-9 code prediction.
+
     Code based on HTDC (Ng et al, 2022)"""
+
     def __init__(
         self,
         notes_agg_df,
         tokenizer,
         max_chunks,
-        setup='latest', # 'uniform
+        setup="latest",  # 'uniform
         limit_ds=0,
         batch_size=None,
     ):
@@ -54,41 +55,51 @@ class CustomDataset(Dataset):
         return change_points
 
     def _get_cutoffs(self, hours_elapsed, category_ids):
-        cutoffs = {'2d': -1, '5d': -1, '13d': -1, 'noDS': -1, 'all': -1}
+        cutoffs = {"2d": -1, "5d": -1, "13d": -1, "noDS": -1, "all": -1}
         for i, (hour, cat) in enumerate(zip(hours_elapsed, category_ids)):
             if cat != 5:
-                if hour < 2*24:
-                    cutoffs['2d'] = i
-                if hour < 5*24:
-                    cutoffs['5d'] = i
-                if hour < 13*24:
-                    cutoffs['13d'] = i
-                cutoffs['noDS'] = i
+                if hour < 2 * 24:
+                    cutoffs["2d"] = i
+                if hour < 5 * 24:
+                    cutoffs["5d"] = i
+                if hour < 13 * 24:
+                    cutoffs["13d"] = i
+                cutoffs["noDS"] = i
             # cutoffs['all'] = i
         return cutoffs
 
     def filter_mask(self, seq_ids):
-        """ Get selected indices according to the logic:
+        """Get selected indices according to the logic:
         1. All indices of the first note
         2. All indices of the last note (a.k.a. discharge summary))
-        3. Randomly select the remaining indices from the middle notes """
+        3. Randomly select the remaining indices from the middle notes"""
         first_indices = np.where(seq_ids == seq_ids[0])[0]
         # limit DS to 4 chunks
         last_indices = np.where(seq_ids == seq_ids[-1])[0]
         # limit last indices if more than max_chunks - len(first_indices)
         # selecting the last max_chunks - len(first_indices) indices
-        last_indices = last_indices[-min(len(last_indices), self.max_chunks - len(first_indices)):]
-        last_indices = last_indices[-self.limit_ds:]
-        middle_indices = np.where(np.logical_and(seq_ids > seq_ids[0], seq_ids <  seq_ids[-1]))[0]
+        last_indices = last_indices[
+            -min(len(last_indices), self.max_chunks - len(first_indices)) :
+        ]
+        last_indices = last_indices[-self.limit_ds :]
+        middle_indices = np.where(
+            np.logical_and(seq_ids > seq_ids[0], seq_ids < seq_ids[-1])
+        )[0]
         middle_indices = np.sort(
             np.random.choice(
                 middle_indices,
-                max(0,min(len(middle_indices), self.max_chunks - len(first_indices) - len(last_indices))),
-                replace = False
+                max(
+                    0,
+                    min(
+                        len(middle_indices),
+                        self.max_chunks - len(first_indices) - len(last_indices),
+                    ),
+                ),
+                replace=False,
             )
         )
-        return first_indices.tolist() +  middle_indices.tolist() + last_indices.tolist()
-    
+        return first_indices.tolist() + middle_indices.tolist() + last_indices.tolist()
+
     def __getitem__(self, idx):
         data = self.notes_agg_df.iloc[idx]
 
@@ -165,7 +176,7 @@ class CustomDataset(Dataset):
         seq_id_dict = {seq: idx for idx, seq in enumerate(seq_id_vals)}
         seq_ids = seq_ids.apply_(seq_id_dict.get)
         cutoffs = self._get_cutoffs(hours_elapsed, category_ids)
-        
+
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
@@ -174,5 +185,5 @@ class CustomDataset(Dataset):
             "label": label,
             "hadm_id": hadm_id,
             "hours_elapsed": hours_elapsed,
-            "cutoffs": cutoffs
+            "cutoffs": cutoffs,
         }
