@@ -50,6 +50,8 @@ class Trainer:
         self.config = config
         self.device = device
         self.dtype = dtype
+        
+        self.CosineLoss = nn.CosineEmbeddingLoss(reduction="mean")
 
     def train(
         self,
@@ -86,30 +88,51 @@ class Trainer:
                     enable_flash=False
                 ) as disable:
                     # with autocast():
-                    scores, pred_categories = self.model(
+                    scores, doc_embeddings, aux_predictions = self.model(
                         input_ids=input_ids.to(self.device, dtype=torch.long),
                         attention_mask=attention_mask.to(self.device, dtype=torch.long),
                         seq_ids=seq_ids.to(self.device, dtype=torch.long),
                         category_ids=category_ids.to(self.device, dtype=torch.long),
                         # note_end_chunk_ids=note_end_chunk_ids,
                     )
-                    # remove first category, add "end of sequence" class
-                    if len(category_ids) > 1 and pred_categories is not None:
-                        true_categories = F.one_hot(
-                            torch.concat(
-                                [
-                                    category_ids[1:],
-                                    torch.tensor([self.config["num_categories"]]),
-                                ]
-                            ),
-                            num_classes=self.config["num_categories"] + 1,
-                        )
-                        loss_aux = F.cross_entropy(
-                            pred_categories,
-                            true_categories.to(self.device, dtype=self.dtype),
-                        )
-                        preds["hyps_aux"].append(pred_categories.detach().cpu().numpy())
-                        preds["refs_aux"].append(true_categories.detach().cpu().numpy())
+                    # Auxiliary task of predicting next document category
+                    if self.config["aux_task"] == "next_document_category":
+                        if len(category_ids) > 1 and aux_predictions is not None:
+                            true_categories = F.one_hot(
+                                # remove 1st category id and add a dummy category end
+                                torch.concat(
+                                    [
+                                        category_ids[1:],
+                                        torch.tensor([self.config["num_categories"]]),
+                                    ]
+                                ),
+                                num_classes=self.config["num_categories"] + 1,
+                            )
+                            loss_aux = F.cross_entropy(
+                                aux_predictions,
+                                true_categories.to(self.device, dtype=self.dtype),
+                            )
+                            preds["hyps_aux"].append(aux_predictions.detach().cpu().numpy())
+                            preds["refs_aux"].append(true_categories.detach().cpu().numpy())
+                    # Auxiliary task of predicting next document embedding
+                    elif self.config["aux_task"] == "next_document_embedding":                    
+                        # loss is the cosine similarity between the predicted and true next embeddings
+                        if len(doc_embeddings) > 1 and aux_predictions is not None:
+                            true_embeddings = doc_embeddings[1:]
+                            loss_aux = self.CosineLoss(
+                                aux_predictions[:-1], # last prediction is not used
+                                true_embeddings.to(self.device, dtype=self.dtype).detach(), # detach target
+                                torch.ones(true_embeddings.shape[0], device=self.device), # all are positive samples
+                            )
+                    elif self.config["aux_task"] == "last_document_embedding":
+                        # loss is the cosine similarity between the predicted and the LAST true embedding
+                        if len(doc_embeddings) > 1 and aux_predictions is not None:
+                            true_embeddings = doc_embeddings[-1].repeat(len(doc_embeddings)-1, 1)
+                            loss_aux = self.CosineLoss(
+                                aux_predictions[:-1], # last prediction is not used
+                                true_embeddings.to(self.device, dtype=self.dtype).detach(), # detach target
+                                torch.ones(true_embeddings.shape[0], device=self.device), # all are positive samples
+                            )
                     else:
                         loss_aux = torch.tensor(0)
                     loss_cls = F.binary_cross_entropy_with_logits(
@@ -249,7 +272,8 @@ class Trainer:
         train_metrics = mymetrics.from_numpy(
             np.asarray(preds["hyps"]), np.asarray(preds["refs"])
         )
-        if not self.config["is_baseline"]:
+        # if we have stored some aux predictions (case of next document category prediction)
+        if self.config["aux_task"] == "next_document_category":
             train_metrics_aux = mymetrics.from_numpy(
                 np.concatenate(preds["hyps_aux"]), np.concatenate(preds["refs_aux"])
             )
@@ -276,6 +300,7 @@ class Trainer:
             optimise_threshold=False,
             num_categories=self.config["num_categories"],
             is_baseline=self.config["is_baseline"],
+            aux_task=self.config["aux_task"],
         )
         # print(validation_metrics_temp)
         train_metrics["loss"] = np.mean(train_loss["loss_total"])
@@ -284,8 +309,8 @@ class Trainer:
         result = self.save_results(
             train_metrics, val_metrics, training_args, timeframe="all"
         )
-        # save results of aux task
-        if not self.config["is_baseline"]:
+        # save results of aux task (only if there are some hyps and preds)
+        if self.config["aux_task"] == "next_document_category":
             _ = self.save_results(
                 train_metrics_aux, val_metrics_aux, training_args, timeframe="all_aux"
             )
@@ -303,3 +328,6 @@ class Trainer:
         self.model.train()  # put model to training mode
 
         return result
+
+
+
