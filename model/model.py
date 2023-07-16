@@ -104,7 +104,7 @@ class NextDocumentEmbeddingPredictor(nn.Module):
     def forward(self, document_encodings):
         # predict next document embedding
         next_document_encodings = self.relu1(self.linear(document_encodings))
-        next_document_encodings = self.linear2(document_encodings)
+        next_document_encodings = self.linear2(next_document_encodings)
         return next_document_encodings
 
 
@@ -216,13 +216,13 @@ class Model(nn.Module):
                 self.hidden_size, self.num_labels
             )
         self.document_regressor = DocumentAutoRegressor(self.hidden_size)
-        if self.auxiliary_task == "next_document_embedding":
+        if self.aux_task in ("next_document_embedding", "last_document_embedding"):
             self.document_predictor = NextDocumentEmbeddingPredictor(self.hidden_size)
-        elif self.auxiliary_task == "next_document_category":
+        elif self.aux_task == "next_document_category":
             self.category_predictor = NextDocumentCategoryPredictor(
                 self.hidden_size, self.num_categories
             )
-        elif self.auxiliary_task != "none":
+        elif self.aux_task != "none":
             raise ValueError(
                 "auxiliary_task must be next_document_embedding or next_document_category or none"
             )
@@ -318,14 +318,14 @@ class Model(nn.Module):
                 sequence_output.view(-1, 1, self.hidden_size)
             )
         # make aux predictions
-        if self.auxiliary_task == "next_document_embedding":
+        if self.aux_task in ("next_document_embedding", "last_document_embedding"):
             aux_predictions = self.document_predictor(sequence_output)
-        elif self.auxiliary_task == "next_document_category":
+        elif self.aux_task == "next_document_category":
             aux_predictions = self.category_predictor(sequence_output)
-        elif self.auxiliary_task == "none":
+        elif self.aux_task == "none":
             aux_predictions = None
         # apply label attention at document-level
-        sequence_output = self.label_attn(
+        scores = self.label_attn(
             sequence_output
         )  # apply label attention at token-level
-        return sequence_output, aux_predictions
+        return scores, sequence_output, aux_predictions
