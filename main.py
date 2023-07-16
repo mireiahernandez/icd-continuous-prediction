@@ -40,6 +40,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--setup", type=str, default="latest", help="whether to use multihead attention")
     parser.add_argument("-i", "--limit_ds", type=int, default=0, help="whether to use multihead attention")
     parser.add_argument("-b", "--is_baseline", type=boolean_string, default=False, help="whether to use multihead attention")
+    parser.add_argument("-a", "--aux_task", type=str, default="next_document_embedding", help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -91,6 +92,7 @@ if __name__ == "__main__":
         ,"setup": args_config['setup']
         ,"limit_ds": args_config['limit_ds']
         ,"is_baseline": args_config['is_baseline']
+        ,"aux_task": args_config["aux_task"]
     }
     with open(os.path.join("", f"results/config_{config['run_name']}.json"), "w") as f:
         json.dump(config, f)
