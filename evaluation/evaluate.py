@@ -16,6 +16,7 @@ def evaluate(
     optimise_threshold=False,
     num_categories=1,
     is_baseline=False,
+    aux_task=None,
 ):
     model.eval()
     with torch.no_grad():
@@ -39,21 +40,22 @@ def evaluate(
             # note_end_chunk_ids = data["note_end_chunk_ids"]
             cutoffs = data["cutoffs"]
 
-            scores, pred_categories = model(
+            scores, _, aux_predictions = model(
                 input_ids=input_ids.to(device, dtype=torch.long),
                 attention_mask=attention_mask.to(device, dtype=torch.long),
                 seq_ids=seq_ids.to(device, dtype=torch.long),
                 category_ids=category_ids.to(device, dtype=torch.long),
                 # note_end_chunk_ids=note_end_chunk_ids,
             )
-            if len(category_ids) > 1 and pred_categories is not None:
-                true_categories = F.one_hot(
-                    torch.concat([category_ids[1:], torch.tensor([num_categories])]),
-                    num_classes=num_categories + 1,
-                )
+            if aux_task == "next_document_category":
+                if len(category_ids) > 1 and aux_predictions is not None:
+                    true_categories = F.one_hot(
+                        torch.concat([category_ids[1:], torch.tensor([num_categories])]),
+                        num_classes=num_categories + 1,
+                    )
 
-                preds["hyps_aux"].append(pred_categories.detach().cpu().numpy())
-                preds["refs_aux"].append(true_categories.detach().cpu().numpy())
+                    preds["hyps_aux"].append(aux_predictions.detach().cpu().numpy())
+                    preds["refs_aux"].append(true_categories.detach().cpu().numpy())
 
             probs = F.sigmoid(scores)
             ids.append(data["hadm_id"][0].item())
@@ -81,7 +83,7 @@ def evaluate(
             np.asarray(preds["refs"]),
             pred_cutoff=pred_cutoff,
         )
-        if not is_baseline:
+        if len(preds["hyps_aux"]) > 0:
             val_metrics_aux = mymetrics.from_numpy(
                 np.concatenate(preds["hyps_aux"]),
                 np.concatenate(preds["refs_aux"]),
