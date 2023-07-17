@@ -319,7 +319,12 @@ class Model(nn.Module):
             )
         # make aux predictions
         if self.aux_task in ("next_document_embedding", "last_document_embedding"):
-            aux_predictions = self.document_predictor(sequence_output)
+            if self.apply_transformation:
+                aux_predictions = self.document_predictor(
+                    sequence_output
+                )
+            else:
+                aux_predictions = sequence_output
         elif self.aux_task == "next_document_category":
             aux_predictions = self.category_predictor(sequence_output)
         elif self.aux_task == "none":
