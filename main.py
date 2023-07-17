@@ -41,7 +41,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--limit_ds", type=int, default=0, help="whether to use multihead attention")
     parser.add_argument("-b", "--is_baseline", type=boolean_string, default=False, help="whether to use multihead attention")
     parser.add_argument("-a", "--aux_task", type=str, default="next_document_embedding", help="whether to use multihead attention")
-    parser.add_argument("-a", "--apply_transformation", type=boolean_string, default=False, help="whether to use multihead attention")
+    parser.add_argument("-t", "--apply_transformation", type=boolean_string, default=False, help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
