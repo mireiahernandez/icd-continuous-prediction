@@ -167,7 +167,12 @@ class CustomDataset(Dataset):
             seq_ids = seq_ids[indices_mask]
             category_ids = category_ids[indices_mask]
             hours_elapsed = hours_elapsed[indices_mask]
-
+        
+        elif self.setup == "random":
+            # keep all notes and random sample during training
+            # while keeping all notes for inference
+            pass 
+        
         else:
             raise ValueError("Invalid setup")
 
