@@ -136,7 +136,7 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
             requires_grad=True,
         )
 
-    def forward(self, encoding, all_tokens=True):
+    def forward(self, encoding, all_tokens=True, cutoffs=None):
         # encoding: Tensor of size (Nc x T) x H
         # mask: Tensor of size Nn x (Nc x T) x H
         # temporal_encoding = Nn x (N x T) x hidden_size
@@ -157,10 +157,18 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         mask = torch.ones(size=(Nc, Nc * T), dtype=torch.bool).to(device=self.device)
         for i in range(Nc):
             mask[i, : (i + 1) * T] = False
+        
+        # only mask out at 2d, 5d, 13d and no DS to reduce computation
+        # get list of cutoff indices from cutoffs dictionary
+        reduce_computation = True
+        if reduce_computation:
+            cutoff_indices = [cutoffs[key][0] for key in cutoffs]
+            mask = mask[cutoff_indices, :]
+
         attn_output = self.multiheadattn.forward(
-            query=self.label_queries.repeat(Nc, 1, 1),
-            key=encoding.repeat(Nc, 1, 1),
-            value=encoding.repeat(Nc, 1, 1),
+            query=self.label_queries.repeat(mask.shape[0], 1, 1),
+            key=encoding.repeat(mask.shape[0], 1, 1),
+            value=encoding.repeat(mask.shape[0], 1, 1),
             key_padding_mask=mask,
             need_weights=False,
         )[0]
@@ -263,6 +271,7 @@ class Model(nn.Module):
         attention_mask,
         seq_ids,
         category_ids,
+        cutoffs,
         note_end_chunk_ids=None,
         token_type_ids=None,
         is_evaluation=False,
@@ -333,8 +342,9 @@ class Model(nn.Module):
         # apply label attention at document-level
         if is_evaluation == False:
             scores = self.label_attn(
-                sequence_output
+                sequence_output, cutoffs = cutoffs
             )  # apply label attention at token-level
             return scores, sequence_output, aux_predictions
+        
         else:
             return sequence_output
