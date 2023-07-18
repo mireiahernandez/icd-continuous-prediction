@@ -69,6 +69,7 @@ class CustomDataset(Dataset):
         return cutoffs
 
     def filter_mask(self, seq_ids):
+        # TODO: this is producing a different mask every time, we should fix seed everytime
         """Get selected indices according to the logic:
         1. All indices of the first note
         2. All indices of the last note (a.k.a. discharge summary))
@@ -101,6 +102,7 @@ class CustomDataset(Dataset):
         return first_indices.tolist() + middle_indices.tolist() + last_indices.tolist()
 
     def __getitem__(self, idx):
+        np.random.seed(1)
         data = self.notes_agg_df.iloc[idx]
 
         output = [self.tokenize(doc) for doc in data.TEXT]
