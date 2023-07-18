@@ -57,7 +57,7 @@ if __name__ == "__main__":
     print(device)
 
     ### for debugging use cpu
-    #device = cpu
+    # device = cpu
 
     config = {
     #    "run_name": "Run_test_TLWAN"
@@ -73,8 +73,8 @@ if __name__ == "__main__":
         ,"use_reverse_positional_embeddings": True
         ,"priority_mode": "Last"
         ,"priority_idxs": [1]
-        ,"use_document_embeddings": True
-        ,"use_reverse_document_embeddings": True
+        ,"use_document_embeddings": False
+        ,"use_reverse_document_embeddings": False
         ,"use_category_embeddings": True
         ,"num_labels": 50
         ,"use_all_tokens": False
