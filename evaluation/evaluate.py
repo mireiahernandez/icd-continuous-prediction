@@ -30,8 +30,9 @@ def evaluate(
         avail_doc_count = []
         print(f"Starting validation loop...")
         for t, data in enumerate(tqdm(generator)):
+            # TODO: fix code so that sequence ids embeddings can be used
+            # right now they cannot be used
             labels = data["label"][0][: model.num_labels]
-
             input_ids = data["input_ids"][0]
             attention_mask = data["attention_mask"][0]
             seq_ids = data["seq_ids"][0]
@@ -40,20 +41,38 @@ def evaluate(
             # note_end_chunk_ids = data["note_end_chunk_ids"]
             cutoffs = data["cutoffs"]
 
-            scores, _, aux_predictions = model(
-                input_ids=input_ids.to(device, dtype=torch.long),
-                attention_mask=attention_mask.to(device, dtype=torch.long),
-                seq_ids=seq_ids.to(device, dtype=torch.long),
-                category_ids=category_ids.to(device, dtype=torch.long),
-                # note_end_chunk_ids=note_end_chunk_ids,
-            )
+            complete_sequence_output = []
+            # run through data in chunks of max_chunks
+            for i in range(0, input_ids.shape[0], model.max_chunks):
+                # only get the document embeddings
+                sequence_output = model(
+                    input_ids=input_ids[i : i + model.max_chunks].to(
+                        device, dtype=torch.long
+                    ),
+                    attention_mask=attention_mask[i : i + model.max_chunks].to(
+                        device, dtype=torch.long
+                    ),
+                    seq_ids=seq_ids[i : i + model.max_chunks].to(
+                        device, dtype=torch.long
+                    ),
+                    category_ids=category_ids[i : i + model.max_chunks].to(
+                        device, dtype=torch.long
+                    ),
+                    is_evaluation=True,
+                    # note_end_chunk_ids=note_end_chunk_ids,
+                )
+                complete_sequence_output.append(sequence_output)
+            # concatenate the sequence output
+            sequence_output = torch.cat(complete_sequence_output, dim=0)
+
+            # run through LWAN to get the scores
+            scores = model.label_attn(sequence_output)
             if aux_task == "next_document_category":
                 if len(category_ids) > 1 and aux_predictions is not None:
                     true_categories = F.one_hot(
                         torch.concat([category_ids[1:], torch.tensor([num_categories])]),
                         num_classes=num_categories + 1,
                     )
-
                     preds["hyps_aux"].append(aux_predictions.detach().cpu().numpy())
                     preds["refs_aux"].append(true_categories.detach().cpu().numpy())
 
