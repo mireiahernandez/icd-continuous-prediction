@@ -265,6 +265,7 @@ class Model(nn.Module):
         category_ids,
         note_end_chunk_ids=None,
         token_type_ids=None,
+        is_evaluation=False,
         **kwargs
     ):
         max_seq_id = seq_ids[-1].item()
@@ -330,7 +331,10 @@ class Model(nn.Module):
         elif self.aux_task == "none":
             aux_predictions = None
         # apply label attention at document-level
-        scores = self.label_attn(
-            sequence_output
-        )  # apply label attention at token-level
-        return scores, sequence_output, aux_predictions
+        if is_evaluation == False:
+            scores = self.label_attn(
+                sequence_output
+            )  # apply label attention at token-level
+            return scores, sequence_output, aux_predictions
+        else:
+            return sequence_output
