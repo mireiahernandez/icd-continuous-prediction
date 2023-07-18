@@ -61,12 +61,12 @@ class Trainer:
         for i, (hour, cat) in enumerate(zip(hours_elapsed, category_ids)):
             if cat != 5:
                 if hour < 2 * 24:
-                    cutoffs["2d"] = i
+                    cutoffs["2d"] = [i]
                 if hour < 5 * 24:
-                    cutoffs["5d"] = i
+                    cutoffs["5d"] = [i]
                 if hour < 13 * 24:
-                    cutoffs["13d"] = i
-                cutoffs["noDS"] = i
+                    cutoffs["13d"] = [i]
+                cutoffs["noDS"] = [i]
             # cutoffs['all'] = i
         return cutoffs
 
@@ -133,13 +133,22 @@ class Trainer:
                 preds["hyps_temp"] = {"2d": [], "5d": [], "13d": [], "noDS": []}
                 preds["refs_temp"] = {"2d": [], "5d": [], "13d": [], "noDS": []}
             for t, data in enumerate(tqdm(training_generator)):
-                aug_data = self.random_sample_sequence(data)
-                labels = aug_data["labels"]
-                input_ids = aug_data["input_ids"]
-                attention_mask = aug_data["attention_mask"]
-                seq_ids = aug_data["seq_ids"]
-                category_ids = aug_data["category_ids"]
-                cutoffs = aug_data["cutoffs"]
+                if self.setup == "random":
+                    aug_data = self.random_sample_sequence(data)
+                    labels = aug_data["labels"]
+                    input_ids = aug_data["input_ids"]
+                    attention_mask = aug_data["attention_mask"]
+                    seq_ids = aug_data["seq_ids"]
+                    category_ids = aug_data["category_ids"]
+                    cutoffs = aug_data["cutoffs"]
+                else:
+                    labels = data["label"][0][: self.model.num_labels]
+                    input_ids = data["input_ids"][0]
+                    attention_mask = data["attention_mask"][0]
+                    seq_ids = data["seq_ids"][0]
+                    category_ids = data["category_ids"][0]
+                    # note_end_chunk_ids = data["note_end_chunk_ids"]
+                    cutoffs = data["cutoffs"]
 
                 with torch.cuda.amp.autocast(
                     enabled=True
@@ -217,7 +226,7 @@ class Trainer:
                         for time in cutoff_times:
                             if cutoffs[time] != -1:
                                 preds["hyps_temp"][time].append(
-                                    probs[cutoffs[time], :].detach().cpu().numpy()
+                                    probs[cutoffs[time][0], :].detach().cpu().numpy()
                                 )
                                 preds["refs_temp"][time].append(
                                     labels.detach().cpu().numpy()
