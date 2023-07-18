@@ -50,8 +50,66 @@ class Trainer:
         self.config = config
         self.device = device
         self.dtype = dtype
+        # set all key, value pairs in config as attributes
+        for key, value in config.items():
+            setattr(self, key, value)
         
         self.CosineLoss = nn.CosineEmbeddingLoss(reduction="mean")
+
+    def _get_cutoffs(self, hours_elapsed, category_ids):
+        cutoffs = {"2d": -1, "5d": -1, "13d": -1, "noDS": -1, "all": -1}
+        for i, (hour, cat) in enumerate(zip(hours_elapsed, category_ids)):
+            if cat != 5:
+                if hour < 2 * 24:
+                    cutoffs["2d"] = i
+                if hour < 5 * 24:
+                    cutoffs["5d"] = i
+                if hour < 13 * 24:
+                    cutoffs["13d"] = i
+                cutoffs["noDS"] = i
+            # cutoffs['all'] = i
+        return cutoffs
+
+    def random_sample_sequence(self, data):
+        """ Construct a sequence of max_chunks"""
+        labels = data["label"][0][: self.model.num_labels]
+        input_ids = data["input_ids"][0]
+        attention_mask = data["attention_mask"][0]
+        seq_ids = data["seq_ids"][0]
+        category_ids = data["category_ids"][0]
+        hours_elapsed = data["hours_elapsed"][0]
+
+        # select at random 16 indices
+        num_idxs = input_ids.shape[0]
+        indices_mask = np.arange(num_idxs)
+        indices_mask = np.sort(np.random.choice(
+            indices_mask,
+            min(num_idxs, self.max_chunks),
+            replace=False
+        ))
+
+        # filter input_ids, attention_mask, seq_ids, category_ids, hours_elapsed
+        input_ids = input_ids[indices_mask]
+        attention_mask = attention_mask[indices_mask]
+        seq_ids = seq_ids[indices_mask]
+        category_ids = category_ids[indices_mask]
+        hours_elapsed = hours_elapsed[indices_mask]
+        # recalculate seq ids based on filtered indices
+        seq_id_vals = torch.unique(seq_ids).tolist()
+        seq_id_dict = {seq: idx for idx, seq in enumerate(seq_id_vals)}
+        seq_ids = seq_ids.apply_(seq_id_dict.get)
+        cutoffs = self._get_cutoffs(hours_elapsed, category_ids)
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "seq_ids": seq_ids,
+            "category_ids": category_ids,
+            "labels": labels,
+            "hours_elapsed": hours_elapsed,
+            "cutoffs": cutoffs,
+        }
+
 
     def train(
         self,
@@ -75,13 +133,14 @@ class Trainer:
                 preds["hyps_temp"] = {"2d": [], "5d": [], "13d": [], "noDS": []}
                 preds["refs_temp"] = {"2d": [], "5d": [], "13d": [], "noDS": []}
             for t, data in enumerate(tqdm(training_generator)):
-                labels = data["label"][0][: self.model.num_labels]
-                input_ids = data["input_ids"][0]
-                attention_mask = data["attention_mask"][0]
-                seq_ids = data["seq_ids"][0]
-                category_ids = data["category_ids"][0]
-                # note_end_chunk_ids = data["note_end_chunk_ids"]
-                cutoffs = data["cutoffs"]
+                aug_data = self.random_sample_sequence(data)
+                labels = aug_data["labels"]
+                input_ids = aug_data["input_ids"]
+                attention_mask = aug_data["attention_mask"]
+                seq_ids = aug_data["seq_ids"]
+                category_ids = aug_data["category_ids"]
+                cutoffs = aug_data["cutoffs"]
+
                 with torch.cuda.amp.autocast(
                     enabled=True
                 ) as autocast, torch.backends.cuda.sdp_kernel(
@@ -158,7 +217,7 @@ class Trainer:
                         for time in cutoff_times:
                             if cutoffs[time] != -1:
                                 preds["hyps_temp"][time].append(
-                                    probs[cutoffs[time][0], :].detach().cpu().numpy()
+                                    probs[cutoffs[time], :].detach().cpu().numpy()
                                 )
                                 preds["refs_temp"][time].append(
                                     labels.detach().cpu().numpy()
