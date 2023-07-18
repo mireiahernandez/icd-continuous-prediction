@@ -57,7 +57,7 @@ class Trainer:
         self.CosineLoss = nn.CosineEmbeddingLoss(reduction="mean")
 
     def _get_cutoffs(self, hours_elapsed, category_ids):
-        cutoffs = {"2d": -1, "5d": -1, "13d": -1, "noDS": -1, "all": -1}
+        cutoffs = {"2d": [-1], "5d": [-1], "13d": [-1], "noDS": [-1], "all": [-1]}
         for i, (hour, cat) in enumerate(zip(hours_elapsed, category_ids)):
             if cat != 5:
                 if hour < 2 * 24:
@@ -161,6 +161,7 @@ class Trainer:
                         attention_mask=attention_mask.to(self.device, dtype=torch.long),
                         seq_ids=seq_ids.to(self.device, dtype=torch.long),
                         category_ids=category_ids.to(self.device, dtype=torch.long),
+                        cutoffs=cutoffs,
                         # note_end_chunk_ids=note_end_chunk_ids,
                     )
                     # Auxiliary task of predicting next document category
@@ -208,6 +209,7 @@ class Trainer:
                         labels.to(self.device, dtype=self.dtype)[None, :],
                     )
                     print(loss_aux)
+                    # TODO: delete de 1-weights
                     loss = (1 - self.config["weight_aux"]) * loss_cls + self.config[
                         "weight_aux"
                     ] * loss_aux
@@ -223,10 +225,10 @@ class Trainer:
                     preds["refs"].append(labels.detach().cpu().numpy())
                     if self.config["evaluate_temporal"]:
                         cutoff_times = ["2d", "5d", "13d", "noDS"]
-                        for time in cutoff_times:
-                            if cutoffs[time] != -1:
+                        for n, time in enumerate(cutoff_times):
+                            if cutoffs[time][0] != -1:
                                 preds["hyps_temp"][time].append(
-                                    probs[cutoffs[time][0], :].detach().cpu().numpy()
+                                    probs[n, :].detach().cpu().numpy()
                                 )
                                 preds["refs_temp"][time].append(
                                     labels.detach().cpu().numpy()
@@ -240,8 +242,7 @@ class Trainer:
                         self.scaler.update()
                         self.optimizer.zero_grad()
                         self.lr_scheduler.step()
-                # if t==1000:
-                #     break
+
             print("Starting evaluation...")
             print("Epoch: %d" % (training_args["TOTAL_COMPLETED_EPOCHS"]))
             result = self.evaluate_and_save_results(
@@ -369,6 +370,7 @@ class Trainer:
             num_categories=self.config["num_categories"],
             is_baseline=self.config["is_baseline"],
             aux_task=self.config["aux_task"],
+            setup = self.config["setup"],
         )
         # print(validation_metrics_temp)
         train_metrics["loss"] = np.mean(train_loss["loss_total"])
