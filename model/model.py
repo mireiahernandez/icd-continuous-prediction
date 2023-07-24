@@ -31,7 +31,7 @@ class LabelAttentionClassifier(nn.Module):
             requires_grad=True,
         )
 
-    def forward(self, encoding):
+    def forward(self, encoding, cutoffs=None):
         # encoding: Tensor of size num_chunks x hidden_size
 
         attention_weights = F.softmax(
@@ -110,7 +110,7 @@ class NextDocumentEmbeddingPredictor(nn.Module):
 
 class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
     def __init__(
-        self, hidden_size, seq_len, num_labels, num_heads, device, all_tokens=True
+        self, hidden_size, seq_len, num_labels, num_heads, device, all_tokens=True, reduce_computation=True
     ):
         super().__init__()
         self.hidden_size = hidden_size
@@ -119,6 +119,8 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         self.seq_len = seq_len
         self.device = device
         self.all_tokens = all_tokens
+        self.reduce_computation = reduce_computation
+
         self.multiheadattn = nn.MultiheadAttention(
             hidden_size, num_heads=num_heads, batch_first=True
         )
@@ -160,8 +162,8 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         
         # only mask out at 2d, 5d, 13d and no DS to reduce computation
         # get list of cutoff indices from cutoffs dictionary
-        reduce_computation = True
-        if reduce_computation:
+
+        if self.reduce_computation:
             cutoff_indices = [cutoffs[key][0] for key in cutoffs]
             mask = mask[cutoff_indices, :]
 
@@ -172,6 +174,76 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
             key_padding_mask=mask,
             need_weights=False,
         )[0]
+
+        score = torch.sum(
+            attn_output
+            * self.label_weights.unsqueeze(0).view(
+                1, self.num_labels, self.hidden_size
+            ),
+            dim=2,
+        )
+        return score
+
+
+class TemporalLabelAttentionClassifier(nn.Module):
+    def __init__(
+        self, hidden_size, seq_len, num_labels, num_heads, device, all_tokens=True
+    ):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_labels = num_labels
+        self.num_heads = num_heads
+        self.seq_len = seq_len
+        self.device = device
+        self.all_tokens = all_tokens
+
+        self.label_queries = nn.parameter.Parameter(
+            torch.normal(
+                0, 0.1, size=(self.num_labels, self.hidden_size), dtype=torch.float
+            ),
+            requires_grad=True,
+        )
+        self.label_weights = nn.parameter.Parameter(
+            torch.normal(
+                0, 0.1, size=(self.hidden_size, self.num_labels), dtype=torch.float
+            ),
+            requires_grad=True,
+        )
+
+    def forward(self, encoding, all_tokens=True, cutoffs=None):
+        # encoding: Tensor of size (Nc x T) x H
+        # mask: Tensor of size Nn x (Nc x T) x H
+        # temporal_encoding = Nn x (N x T) x hidden_size
+        T = self.seq_len
+        if not self.all_tokens:
+            T = 1  # only use the [CLS]-token representation
+        Nc = int(encoding.shape[0] / T)
+        H = self.hidden_size
+        Nl = self.num_labels
+
+        # label query: shape L, H
+        # encoding: hape NcxT, H
+        # query shape:  Nn, L, H
+        # key shape: Nn, Nc*T, H
+        # values shape: Nn, Nc*T, H
+        # attn mask: Nn, Nl, Nc*T (true if take into account)
+        # output: N, L, H
+        mask = torch.zeros(size=(Nc, Nl, Nc * T), dtype=torch.bool).to(device=self.device)
+        for i in range(Nc):
+            mask[i, :, : (i + 1) * T] = True
+        # only mask out at 2d, 5d, 13d and no DS to reduce computation
+        # get list of cutoff indices from cutoffs dictionary
+        reduce_computation = True
+        if reduce_computation:
+            cutoff_indices = [cutoffs[key][0] for key in cutoffs]
+            mask = mask[cutoff_indices, :, :]
+
+        attn_output = F.scaled_dot_product_attention(
+            query=self.label_queries.repeat(mask.shape[0], 1, 1),
+            key=encoding.repeat(mask.shape[0], 1, 1),
+            value=encoding.repeat(mask.shape[0], 1, 1),
+            attn_mask=mask,
+        )
 
         score = torch.sum(
             attn_output
@@ -218,7 +290,16 @@ class Model(nn.Module):
                 self.num_heads_labattn,
                 device=device,
                 all_tokens=self.use_all_tokens,
+                reduce_computation=self.reduce_computation,
             )
+            # self.label_attn = TemporalLabelAttentionClassifier(
+            #     self.hidden_size,
+            #     self.seq_len,
+            #     self.num_labels,
+            #     self.num_heads_labattn,
+            #     device=device,
+            #     all_tokens=self.use_all_tokens,
+            # )
         else:
             self.label_attn = LabelAttentionClassifier(
                 self.hidden_size, self.num_labels
@@ -275,6 +356,7 @@ class Model(nn.Module):
         note_end_chunk_ids=None,
         token_type_ids=None,
         is_evaluation=False,
+        return_attn_weights=False,
         **kwargs
     ):
         max_seq_id = seq_ids[-1].item()
