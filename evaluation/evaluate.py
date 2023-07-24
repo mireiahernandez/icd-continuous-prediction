@@ -18,6 +18,7 @@ def evaluate(
     is_baseline=False,
     aux_task=None,
     setup='latest',
+    reduce_computation=False,
 ):
     model.eval()
     with torch.no_grad():
@@ -106,9 +107,14 @@ def evaluate(
                 cutoff_times = ["2d", "5d", "13d", "noDS"]
                 for n, time in enumerate(cutoff_times):
                     if cutoffs[time][0] != -1:
-                        preds["hyps_temp"][time].append(
-                            probs[n, :].detach().cpu().numpy()
-                        )
+                        if reduce_computation:
+                            preds["hyps_temp"][time].append(
+                                probs[n, :].detach().cpu().numpy()
+                            )
+                        else:
+                            preds["hyps_temp"][time].append(
+                                probs[cutoffs[time][0], :].detach().cpu().numpy()
+                            )
                         preds["refs_temp"][time].append(labels.detach().cpu().numpy())
 
         if optimise_threshold:
