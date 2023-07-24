@@ -42,6 +42,10 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--is_baseline", type=boolean_string, default=False, help="whether to use multihead attention")
     parser.add_argument("-a", "--aux_task", type=str, default="next_document_embedding", help="whether to use multihead attention")
     parser.add_argument("-t", "--apply_transformation", type=boolean_string, default=False, help="whether to use multihead attention")
+    parser.add_argument("-k", "--use_all_tokens", type=boolean_string, default=False, help="whether to use multihead attention")
+    parser.add_argument("-c", "--apply_weight", type=boolean_string, default=False, help="whether to use multihead attention")
+    parser.add_argument("-f", "--reduce_computation", type=boolean_string, default=False, help="whether to use multihead attention")
+    parser.add_argument("-y", "--apply_temporal_loss", type=boolean_string, default=False, help="whether to use multihead attention")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -77,7 +81,7 @@ if __name__ == "__main__":
         ,"use_reverse_document_embeddings": False
         ,"use_category_embeddings": True
         ,"num_labels": 50
-        ,"use_all_tokens": False
+        ,"use_all_tokens": args_config['use_all_tokens']
         ,"num_heads_labattn": args_config['num_heads_labattn']
         ,"final_aggregation": "cls"
         ,"only_discharge_summary": False
@@ -95,6 +99,9 @@ if __name__ == "__main__":
         ,"is_baseline": args_config['is_baseline']
         ,"aux_task": args_config["aux_task"]
         ,"apply_transformation": args_config["apply_transformation"]
+        ,"apply_weight":args_config["apply_weight"]
+        ,"reduce_computation":args_config["reduce_computation"]
+        ,"apply_temporal_loss":args_config["apply_temporal_loss"]
 
     }
     with open(os.path.join("", f"results/config_{config['run_name']}.json"), "w") as f:
