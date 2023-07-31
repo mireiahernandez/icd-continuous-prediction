@@ -278,14 +278,14 @@ class Trainer:
                     f"results/BEST_{self.config['run_name']}.pth",
                 )
                 if self.config["save_model"]:
-                    self.save_model(result, training_args, best_path)
+                    self.save_torch_model(result, training_args, best_path)
 
             if self.config["save_model"]:
                 model_path = os.path.join(
                     self.config["project_path"],
                     f"results/{self.config['run_name']}.pth",
                 )
-                self._save_model(result, training_args, model_path)
+                self.save_torch_model(result, training_args, model_path)
 
             if (self.config["patience_threshold"] > 0) and (
                 training_args["CURRENT_PATIENCE_COUNT"]
@@ -300,7 +300,7 @@ class Trainer:
                 print("Stopped upon hitting max number of training epochs")
                 break
 
-    def __save_model(self, result, training_args, save_path):
+    def save_torch_model(self, result, training_args, save_path):
         torch.save(
             {
                 "model_state_dict": self.model.state_dict(),

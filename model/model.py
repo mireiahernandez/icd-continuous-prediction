@@ -47,15 +47,15 @@ class LabelAttentionClassifier(nn.Module):
         return score.unsqueeze(0)  # CHANGED THIS FOR DEBUGGING
 
 
-class DocumentAutoRegressor(nn.Module):
-    def __init__(self, hidden_size):
+class HierARDocumentTransformer(nn.Module):
+    def __init__(self, hidden_size, num_layers=1, nhead=1):
         super().__init__()
         self.hidden_size = hidden_size
         self.transformer_layer = nn.TransformerEncoderLayer(
-            d_model=self.hidden_size, nhead=1
+            d_model=self.hidden_size, nhead=nhead
         )
         self.transformer_encoder = nn.TransformerEncoder(
-            self.transformer_layer, num_layers=1
+            self.transformer_layer, num_layers=num_layers
         )
 
     def forward(self, document_encodings):
@@ -185,76 +185,6 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         return score
 
 
-class TemporalLabelAttentionClassifier(nn.Module):
-    def __init__(
-        self, hidden_size, seq_len, num_labels, num_heads, device, all_tokens=True
-    ):
-        super().__init__()
-        self.hidden_size = hidden_size
-        self.num_labels = num_labels
-        self.num_heads = num_heads
-        self.seq_len = seq_len
-        self.device = device
-        self.all_tokens = all_tokens
-
-        self.label_queries = nn.parameter.Parameter(
-            torch.normal(
-                0, 0.1, size=(self.num_labels, self.hidden_size), dtype=torch.float
-            ),
-            requires_grad=True,
-        )
-        self.label_weights = nn.parameter.Parameter(
-            torch.normal(
-                0, 0.1, size=(self.hidden_size, self.num_labels), dtype=torch.float
-            ),
-            requires_grad=True,
-        )
-
-    def forward(self, encoding, all_tokens=True, cutoffs=None):
-        # encoding: Tensor of size (Nc x T) x H
-        # mask: Tensor of size Nn x (Nc x T) x H
-        # temporal_encoding = Nn x (N x T) x hidden_size
-        T = self.seq_len
-        if not self.all_tokens:
-            T = 1  # only use the [CLS]-token representation
-        Nc = int(encoding.shape[0] / T)
-        H = self.hidden_size
-        Nl = self.num_labels
-
-        # label query: shape L, H
-        # encoding: hape NcxT, H
-        # query shape:  Nn, L, H
-        # key shape: Nn, Nc*T, H
-        # values shape: Nn, Nc*T, H
-        # attn mask: Nn, Nl, Nc*T (true if take into account)
-        # output: N, L, H
-        mask = torch.zeros(size=(Nc, Nl, Nc * T), dtype=torch.bool).to(device=self.device)
-        for i in range(Nc):
-            mask[i, :, : (i + 1) * T] = True
-        # only mask out at 2d, 5d, 13d and no DS to reduce computation
-        # get list of cutoff indices from cutoffs dictionary
-        reduce_computation = True
-        if reduce_computation:
-            cutoff_indices = [cutoffs[key][0] for key in cutoffs]
-            mask = mask[cutoff_indices, :, :]
-
-        attn_output = F.scaled_dot_product_attention(
-            query=self.label_queries.repeat(mask.shape[0], 1, 1),
-            key=encoding.repeat(mask.shape[0], 1, 1),
-            value=encoding.repeat(mask.shape[0], 1, 1),
-            attn_mask=mask,
-        )
-
-        score = torch.sum(
-            attn_output
-            * self.label_weights.unsqueeze(0).view(
-                1, self.num_labels, self.hidden_size
-            ),
-            dim=2,
-        )
-        return score
-
-
 class Model(nn.Module):
     """Model for ICD-9 code temporal predictions.
 
@@ -274,13 +204,7 @@ class Model(nn.Module):
         # base transformer
         self.transformer = AutoModel.from_pretrained(self.base_checkpoint)
 
-        # hierarchical transformer
-        self.transformer2_layer = nn.TransformerEncoderLayer(
-            d_model=self.hidden_size, nhead=self.num_attention_heads
-        )
-        self.transformer2 = nn.TransformerEncoder(
-            self.transformer2_layer, num_layers=self.num_layers
-        )
+
         # LWAN
         if self.use_multihead_attention:
             self.label_attn = TemporalMultiHeadLabelAttentionClassifier(
@@ -304,7 +228,9 @@ class Model(nn.Module):
             self.label_attn = LabelAttentionClassifier(
                 self.hidden_size, self.num_labels
             )
-        self.document_regressor = DocumentAutoRegressor(self.hidden_size)
+        # hierarchical AR transformer
+        if not self.is_baseline:
+            self.document_regressor = HierARDocumentTransformer(self.hidden_size, self.num_layers, self.num_attention_heads)
         if self.aux_task in ("next_document_embedding", "last_document_embedding"):
             self.document_predictor = NextDocumentEmbeddingPredictor(self.hidden_size)
         elif self.aux_task == "next_document_category":
@@ -391,17 +317,10 @@ class Model(nn.Module):
             sequence_output = sequence_output.view(-1, 1, self.hidden_size)
         else:
             sequence_output = sequence_output[:, [0], :]
-        if self.num_layers > 0:
-            sequence_output = self.transformer2(sequence_output)[:, 0, :]
-        else:
-            sequence_output = sequence_output[
-                :, 0, :
-            ]  # remove the singleton to get something of shape [#chunks*512, hidden_size]
-        # note_end_chunk_ids = [0, 3]
-        # sequence_output_notemp = self.label_attn(sequence_output) # apply label attention at token-level
-        # sequence_output_temp = self.temp_label_attn(
-        #     sequence_output, note_end_chunk_ids
-        # )  # apply label attention at token-level
+
+        sequence_output = sequence_output[
+            :, 0, :
+        ]  # remove the singleton to get something of shape [#chunks, hidden_size] or [#chunks*512, hidden_size]
 
         # if not baseline, add document autoregressor
         if not self.is_baseline:

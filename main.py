@@ -37,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("-u", "--use_multihead_attention", type=boolean_string, default='True', help="whether to use multihead attention")
     parser.add_argument("-w", "--weight_aux", type=float, default=0, help="whether to use multihead attention")
     parser.add_argument("-z", "--num_layers", type=int, default=0, help="whether to use multihead attention")
+    parser.add_argument("-x", "--num_attention_heads", type=int, default=1, help="whether to use multihead attention")
     parser.add_argument("-s", "--setup", type=str, default="latest", help="whether to use multihead attention")
     parser.add_argument("-i", "--limit_ds", type=int, default=0, help="whether to use multihead attention")
     parser.add_argument("-b", "--is_baseline", type=boolean_string, default=False, help="whether to use multihead attention")
@@ -46,7 +47,8 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--apply_weight", type=boolean_string, default=False, help="whether to use multihead attention")
     parser.add_argument("-f", "--reduce_computation", type=boolean_string, default=False, help="whether to use multihead attention")
     parser.add_argument("-y", "--apply_temporal_loss", type=boolean_string, default=False, help="whether to use multihead attention")
-
+    parser.add_argument("-g", "--save_model", type=boolean_string, default=False, help="whether to use multihead attention")
+    
     args = parser.parse_args()
     args_config = vars(args)
 
@@ -68,7 +70,7 @@ if __name__ == "__main__":
         "run_name": args_config['run_name']
         ,"project_path": '/vol/bitbucket/mh1022/temporal-modelling-icd'
         ,"base_checkpoint": os.path.join("", "RoBERTa-base-PM-M3-Voc-hf")
-        ,"num_attention_heads": 1
+        ,"num_attention_heads": args_config['num_attention_heads']
         ,"num_layers": args_config['num_layers']
         ,"lr": 5e-5
         ,"max_chunks": args_config['num_chunks']
@@ -87,7 +89,7 @@ if __name__ == "__main__":
         ,"only_discharge_summary": False
         ,"patience_threshold": args_config['patience_threshold']
         ,"max_epochs": args_config['max_epochs']
-        ,"save_model": False
+        ,"save_model": args_config['save_model']
         ,"load_from_checkpoint": False
         ,"checkpoint_name": "Run_all_notes_last_second_transf"
         ,"evaluate_temporal": args_config['evaluate_temporal']
