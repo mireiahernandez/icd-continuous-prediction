@@ -48,7 +48,8 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--reduce_computation", type=boolean_string, default=False, help="whether to use multihead attention")
     parser.add_argument("-y", "--apply_temporal_loss", type=boolean_string, default=False, help="whether to use multihead attention")
     parser.add_argument("-g", "--save_model", type=boolean_string, default=False, help="whether to use multihead attention")
-    
+    parser.add_argument("-o", "--lr", type=float, default=5e-5, help="whether to use multihead attention")
+
     args = parser.parse_args()
     args_config = vars(args)
 
@@ -72,7 +73,7 @@ if __name__ == "__main__":
         ,"base_checkpoint": os.path.join("", "RoBERTa-base-PM-M3-Voc-hf")
         ,"num_attention_heads": args_config['num_attention_heads']
         ,"num_layers": args_config['num_layers']
-        ,"lr": 5e-5
+        ,"lr": args_config['lr']
         ,"max_chunks": args_config['num_chunks']
         ,"grad_accumulation": args_config['num_chunks']
         ,"use_positional_embeddings": True
