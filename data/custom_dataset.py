@@ -173,7 +173,13 @@ class CustomDataset(Dataset):
         elif self.setup == "random":
             # keep all notes and random sample during training
             # while keeping all notes for inference
-            pass
+            # crop at 95th percentile of chunks, i.e., 181.0
+            # to avoid some outliers that cause OOM
+            input_ids = input_ids[-181:]
+            attention_mask = attention_mask[-181:]
+            seq_ids = seq_ids[-181:]
+            category_ids = category_ids[-181:]
+            hours_elapsed = hours_elapsed[-181:]                
 
         else:
             raise ValueError("Invalid setup")
