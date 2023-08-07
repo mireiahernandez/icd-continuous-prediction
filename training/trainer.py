@@ -288,6 +288,7 @@ class Trainer:
                         self.optimizer.zero_grad()
                         self.lr_scheduler.step()
 
+
             print("Starting evaluation...")
             print("Epoch: %d" % (training_args["TOTAL_COMPLETED_EPOCHS"]))
             result = self.evaluate_and_save_results(
