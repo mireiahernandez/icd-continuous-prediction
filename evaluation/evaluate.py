@@ -17,7 +17,7 @@ def evaluate(
     num_categories=1,
     is_baseline=False,
     aux_task=None,
-    setup='latest',
+    setup="latest",
     reduce_computation=False,
 ):
     model.eval()
@@ -86,13 +86,15 @@ def evaluate(
                     attention_mask=attention_mask.to(device, dtype=torch.long),
                     seq_ids=seq_ids.to(device, dtype=torch.long),
                     category_ids=category_ids.to(device, dtype=torch.long),
-                    cutoffs = cutoffs,
+                    cutoffs=cutoffs,
                     # note_end_chunk_ids=note_end_chunk_ids,
                 )
             if aux_task == "next_document_category":
                 if len(category_ids) > 1 and aux_predictions is not None:
                     true_categories = F.one_hot(
-                        torch.concat([category_ids[1:], torch.tensor([num_categories])]),
+                        torch.concat(
+                            [category_ids[1:], torch.tensor([num_categories])]
+                        ),
                         num_classes=num_categories + 1,
                     )
                     preds["hyps_aux"].append(aux_predictions.detach().cpu().numpy())

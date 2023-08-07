@@ -74,7 +74,7 @@ class CustomDataset(Dataset):
         1. All indices of the first note
         2. All indices of the last note (a.k.a. discharge summary))
         3. Randomly select the remaining indices from the middle notes"""
-        first_indices = np.where(seq_ids == seq_ids[0])[0][:self.max_chunks]
+        first_indices = np.where(seq_ids == seq_ids[0])[0][: self.max_chunks]
         # limit DS to 4 chunks
         last_indices = np.where(seq_ids == seq_ids[-1])[0]
         # limit last indices if more than max_chunks - len(first_indices)
@@ -169,12 +169,12 @@ class CustomDataset(Dataset):
             seq_ids = seq_ids[indices_mask]
             category_ids = category_ids[indices_mask]
             hours_elapsed = hours_elapsed[indices_mask]
-        
+
         elif self.setup == "random":
             # keep all notes and random sample during training
             # while keeping all notes for inference
-            pass 
-        
+            pass
+
         else:
             raise ValueError("Invalid setup")
 

@@ -53,7 +53,7 @@ class Trainer:
         # set all key, value pairs in config as attributes
         for key, value in config.items():
             setattr(self, key, value)
-        
+
         self.CosineLoss = nn.CosineEmbeddingLoss(reduction="mean")
 
     def _get_cutoffs(self, hours_elapsed, category_ids):
@@ -71,7 +71,7 @@ class Trainer:
         return cutoffs
 
     def random_sample_sequence(self, data):
-        """ Construct a sequence of max_chunks"""
+        """Construct a sequence of max_chunks"""
         labels = data["label"][0][: self.model.num_labels]
         input_ids = data["input_ids"][0]
         attention_mask = data["attention_mask"][0]
@@ -82,11 +82,11 @@ class Trainer:
         # select at random 16 indices
         num_idxs = input_ids.shape[0]
         indices_mask = np.arange(num_idxs)
-        indices_mask = np.sort(np.random.choice(
-            indices_mask,
-            min(num_idxs, self.max_chunks),
-            replace=False
-        ))
+        indices_mask = np.sort(
+            np.random.choice(
+                indices_mask, min(num_idxs, self.max_chunks), replace=False
+            )
+        )
 
         # filter input_ids, attention_mask, seq_ids, category_ids, hours_elapsed
         input_ids = input_ids[indices_mask]
@@ -109,7 +109,6 @@ class Trainer:
             "hours_elapsed": hours_elapsed,
             "cutoffs": cutoffs,
         }
-
 
     def train(
         self,
@@ -165,7 +164,11 @@ class Trainer:
                         # note_end_chunk_ids=note_end_chunk_ids,
                     )
                     # Auxiliary task of predicting next document category
-                    if self.config["aux_task"] == "next_document_category" and len(category_ids) > 1 and aux_predictions is not None:
+                    if (
+                        self.config["aux_task"] == "next_document_category"
+                        and len(category_ids) > 1
+                        and aux_predictions is not None
+                    ):
                         true_categories = F.one_hot(
                             # remove 1st category id and add a dummy category end
                             torch.concat(
@@ -184,22 +187,40 @@ class Trainer:
                         preds["refs_aux"].append(true_categories.detach().cpu().numpy())
 
                     # Auxiliary task of predicting next document embedding
-                    elif self.config["aux_task"] == "next_document_embedding" and len(doc_embeddings) > 1 and aux_predictions is not None:                   
+                    elif (
+                        self.config["aux_task"] == "next_document_embedding"
+                        and len(doc_embeddings) > 1
+                        and aux_predictions is not None
+                    ):
                         # loss is the cosine similarity between the predicted and true next embeddings
                         true_embeddings = doc_embeddings[1:]
                         loss_aux = self.CosineLoss(
-                            aux_predictions[:-1], # last prediction is not used
-                            true_embeddings.to(self.device, dtype=self.dtype).detach(), # detach target
-                            torch.ones(true_embeddings.shape[0], device=self.device), # all are positive samples
+                            aux_predictions[:-1],  # last prediction is not used
+                            true_embeddings.to(
+                                self.device, dtype=self.dtype
+                            ).detach(),  # detach target
+                            torch.ones(
+                                true_embeddings.shape[0], device=self.device
+                            ),  # all are positive samples
                         )
 
-                    elif self.config["aux_task"] == "last_document_embedding" and len(doc_embeddings) > 1 and aux_predictions is not None:
+                    elif (
+                        self.config["aux_task"] == "last_document_embedding"
+                        and len(doc_embeddings) > 1
+                        and aux_predictions is not None
+                    ):
                         # loss is the cosine similarity between the predicted and the LAST true embedding
-                        true_embeddings = doc_embeddings[-1].repeat(len(doc_embeddings)-1, 1)
+                        true_embeddings = doc_embeddings[-1].repeat(
+                            len(doc_embeddings) - 1, 1
+                        )
                         loss_aux = self.CosineLoss(
-                            aux_predictions[:-1], # last prediction is not used
-                            true_embeddings.to(self.device, dtype=self.dtype).detach(), # detach target
-                            torch.ones(true_embeddings.shape[0], device=self.device), # all are positive samples
+                            aux_predictions[:-1],  # last prediction is not used
+                            true_embeddings.to(
+                                self.device, dtype=self.dtype
+                            ).detach(),  # detach target
+                            torch.ones(
+                                true_embeddings.shape[0], device=self.device
+                            ),  # all are positive samples
                         )
                     else:
                         loss_aux = torch.tensor(0)
@@ -208,21 +229,24 @@ class Trainer:
                         # repeat labels to match the number of temporal points
                         loss_cls = F.binary_cross_entropy_with_logits(
                             scores[:, :],
-                            labels.to(self.device, dtype=self.dtype)[None, :].repeat(scores.shape[0], 1),
+                            labels.to(self.device, dtype=self.dtype)[None, :].repeat(
+                                scores.shape[0], 1
+                            ),
                         )
                     else:
-                        # train with loss on last temporal point only   
+                        # train with loss on last temporal point only
                         loss_cls = F.binary_cross_entropy_with_logits(
                             scores[-1, :][None, :],
                             labels.to(self.device, dtype=self.dtype)[None, :],
                         )
                     # TODO: delete de 1-weights
                     if self.config["apply_weight"]:
-                        loss =  (1-self.config["weight_aux"]) * loss_cls + self.config["weight_aux"] * loss_aux
+                        loss = (1 - self.config["weight_aux"]) * loss_cls + self.config[
+                            "weight_aux"
+                        ] * loss_aux
                     else:
                         loss = loss_cls + self.config["weight_aux"] * loss_aux
 
-                    
                     self.scaler.scale(loss).backward()
 
                     train_loss["loss_cls"].append(loss_cls.detach().cpu().numpy())
@@ -245,7 +269,10 @@ class Trainer:
                                     )
                                 else:
                                     preds["hyps_temp"][time].append(
-                                        probs[cutoffs[time][0], :].detach().cpu().numpy()
+                                        probs[cutoffs[time][0], :]
+                                        .detach()
+                                        .cpu()
+                                        .numpy()
                                     )
 
                                 preds["refs_temp"][time].append(
@@ -388,7 +415,7 @@ class Trainer:
             num_categories=self.config["num_categories"],
             is_baseline=self.config["is_baseline"],
             aux_task=self.config["aux_task"],
-            setup = self.config["setup"],
+            setup=self.config["setup"],
             reduce_computation=self.config["reduce_computation"],
         )
         # print(validation_metrics_temp)
@@ -417,6 +444,3 @@ class Trainer:
         self.model.train()  # put model to training mode
 
         return result
-
-
-

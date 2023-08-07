@@ -110,7 +110,14 @@ class NextDocumentEmbeddingPredictor(nn.Module):
 
 class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
     def __init__(
-        self, hidden_size, seq_len, num_labels, num_heads, device, all_tokens=True, reduce_computation=True
+        self,
+        hidden_size,
+        seq_len,
+        num_labels,
+        num_heads,
+        device,
+        all_tokens=True,
+        reduce_computation=True,
     ):
         super().__init__()
         self.hidden_size = hidden_size
@@ -159,7 +166,7 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
         mask = torch.ones(size=(Nc, Nc * T), dtype=torch.bool).to(device=self.device)
         for i in range(Nc):
             mask[i, : (i + 1) * T] = False
-        
+
         # only mask out at 2d, 5d, 13d and no DS to reduce computation
         # get list of cutoff indices from cutoffs dictionary
 
@@ -204,7 +211,6 @@ class Model(nn.Module):
         # base transformer
         self.transformer = AutoModel.from_pretrained(self.base_checkpoint)
 
-
         # LWAN
         if self.use_multihead_attention:
             self.label_attn = TemporalMultiHeadLabelAttentionClassifier(
@@ -230,7 +236,9 @@ class Model(nn.Module):
             )
         # hierarchical AR transformer
         if not self.is_baseline:
-            self.document_regressor = HierARDocumentTransformer(self.hidden_size, self.num_layers, self.num_attention_heads)
+            self.document_regressor = HierARDocumentTransformer(
+                self.hidden_size, self.num_layers, self.num_attention_heads
+            )
         if self.aux_task in ("next_document_embedding", "last_document_embedding"):
             self.document_predictor = NextDocumentEmbeddingPredictor(self.hidden_size)
         elif self.aux_task == "next_document_category":
@@ -331,9 +339,7 @@ class Model(nn.Module):
         # make aux predictions
         if self.aux_task in ("next_document_embedding", "last_document_embedding"):
             if self.apply_transformation:
-                aux_predictions = self.document_predictor(
-                    sequence_output
-                )
+                aux_predictions = self.document_predictor(sequence_output)
             else:
                 aux_predictions = sequence_output
         elif self.aux_task == "next_document_category":
@@ -343,9 +349,9 @@ class Model(nn.Module):
         # apply label attention at document-level
         if is_evaluation == False:
             scores = self.label_attn(
-                sequence_output, cutoffs = cutoffs
+                sequence_output, cutoffs=cutoffs
             )  # apply label attention at token-level
             return scores, sequence_output, aux_predictions
-        
+
         else:
             return sequence_output
