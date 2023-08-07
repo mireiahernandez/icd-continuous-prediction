@@ -322,7 +322,10 @@ class Model(nn.Module):
         if self.use_all_tokens:
             # before: sequence_output shape [batchsize, seqlen, hiddensize] = [# chunks, 512, hidden size]
             # after: sequence_output shape [#chunks*512, 1, hidden size]
-            sequence_output = sequence_output.view(-1, 1, self.hidden_size)
+            sequence_output_all = sequence_output.view(-1, 1, self.hidden_size)
+            sequence_output_all = sequence_output_all[:,0,:]
+            sequence_output = sequence_output[:, [0], :]
+
         else:
             sequence_output = sequence_output[:, [0], :]
 
@@ -347,11 +350,20 @@ class Model(nn.Module):
         elif self.aux_task == "none":
             aux_predictions = None
         # apply label attention at document-level
+
         if is_evaluation == False:
-            scores = self.label_attn(
-                sequence_output, cutoffs=cutoffs
-            )  # apply label attention at token-level
+            if self.use_all_tokens:
+                scores = self.label_attn(
+                    sequence_output_all, cutoffs=cutoffs
+                )
+            else:
+                scores = self.label_attn(
+                    sequence_output, cutoffs=cutoffs
+                )
             return scores, sequence_output, aux_predictions
 
         else:
-            return sequence_output
+            if self.use_all_tokens:
+                return sequence_output_all
+            else:
+                return sequence_output
