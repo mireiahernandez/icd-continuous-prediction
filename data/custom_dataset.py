@@ -74,6 +74,7 @@ class CustomDataset(Dataset):
         1. All indices of the first note
         2. All indices of the last note (a.k.a. discharge summary))
         3. Randomly select the remaining indices from the middle notes"""
+        np.random.seed(1)
         first_indices = np.where(seq_ids == seq_ids[0])[0][: self.max_chunks]
         # limit DS to 4 chunks
         last_indices = np.where(seq_ids == seq_ids[-1])[0]
