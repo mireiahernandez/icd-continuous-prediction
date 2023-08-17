@@ -92,6 +92,8 @@ if __name__ == "__main__":
         )
     )
     model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(device)
+    model.eval()
 
     # create TEST results csv
     cutoff_times = ["all", "2d", "5d", "13d", "noDS", "all_aux"]
@@ -120,19 +122,20 @@ if __name__ == "__main__":
         setup=config["setup"],
         reduce_computation=config["reduce_computation"],
     )
-
+    breakpoint()
+    test_metrics["f1_by_class"] = list(test_metrics["f1_by_class"])
+    test_metrics["auc_by_class"] = list(test_metrics["auc_by_class"])
     # save all results
-    with open(f"results/TEST_{config['run_name']}_all.csv", "a") as f:
-        json.dump(test_metrics)
+    with open(f"results/TEST_{config['run_name']}_all.csv", "w") as f:
+        json.dump(test_metrics, f)
 
-    # save aux results
-    with open(f"results/TEST_{config['run_name']}_aux.csv", "a") as f:
-        json.dump(test_metrics_aux)
     
     # save temp results
     if config["evaluate_temporal"]:
         for time in ["2d", "5d", "13d", "noDS"]:
-            with open(f"results/TEST_{config['run_name']}_{time}.csv", "a") as f:
-                json.dump(test_metrics_temp[time])
+            test_metrics_temp[time]["f1_by_class"] = list(test_metrics_temp[time]["f1_by_class"])
+            test_metrics_temp[time]["auc_by_class"] = list(test_metrics_temp[time]["auc_by_class"])
+            with open(f"results/TEST_{config['run_name']}_{time}.csv", "w") as f:
+                json.dump(test_metrics_temp[time], f)
     
     print(f"results: {test_metrics_temp}")
