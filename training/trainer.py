@@ -80,13 +80,17 @@ class Trainer:
         hours_elapsed = data["hours_elapsed"][0]
 
         # select at random 16 indices
-        num_idxs = input_ids.shape[0]
-        indices_mask = np.arange(num_idxs)
-        indices_mask = np.sort(
-            np.random.choice(
-                indices_mask, min(num_idxs, self.max_chunks), replace=False
+        if self.random_sample:
+            num_idxs = input_ids.shape[0]
+            indices_mask = np.arange(num_idxs)
+            indices_mask = np.sort(
+                np.random.choice(
+                    indices_mask, min(num_idxs, self.max_chunks), replace=False
+                )
             )
-        )
+        else:
+            # select last self.max_chunks indices
+            indices_mask = np.arange(max(0, input_ids.shape[0] - self.max_chunks), input_ids.shape[0])
 
         # filter input_ids, attention_mask, seq_ids, category_ids, hours_elapsed
         input_ids = input_ids[indices_mask]
