@@ -122,7 +122,6 @@ if __name__ == "__main__":
         setup=config["setup"],
         reduce_computation=config["reduce_computation"],
     )
-    breakpoint()
     test_metrics["f1_by_class"] = list(test_metrics["f1_by_class"])
     test_metrics["auc_by_class"] = list(test_metrics["auc_by_class"])
     # save all results
