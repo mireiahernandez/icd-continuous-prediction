@@ -54,6 +54,7 @@ if __name__ == "__main__":
     parser.add_argument("-y", "--apply_temporal_loss", type=boolean_string, default=False, help="  ")
     parser.add_argument("-g", "--save_model", type=boolean_string, default=False, help="  ")
     parser.add_argument("-o", "--lr", type=float, default=5e-5, help="  ")
+    parser.add_argument("-j", "--random_sample", type=boolean_string, default=True, help="  ")
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -110,6 +111,8 @@ if __name__ == "__main__":
         "apply_weight": args_config["apply_weight"],
         "reduce_computation": args_config["reduce_computation"],
         "apply_temporal_loss": args_config["apply_temporal_loss"],
+        "random_sample": args_config["random_sample"],
+
     }
     with open(os.path.join("", f"results/config_{config['run_name']}.json"), "w") as f:
         json.dump(config, f)
