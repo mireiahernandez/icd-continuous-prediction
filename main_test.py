@@ -58,6 +58,7 @@ if __name__ == "__main__":
         "run_name": args_config["run_name"],
         "project_path": "/vol/bitbucket/mh1022/temporal-modelling-icd",
     }
+    print(f"Evaluating {args_config['run_name']} on test set")
     with open(os.path.join("", f"results/config_{config['run_name']}.json"), "r") as f:
         config = json.load(f)
 
@@ -95,16 +96,6 @@ if __name__ == "__main__":
     model.to(device)
     model.eval()
 
-    # create TEST results csv
-    cutoff_times = ["all", "2d", "5d", "13d", "noDS", "all_aux"]
-    for time in cutoff_times:
-        pd.DataFrame({}).to_csv(
-            os.path.join(
-                config["project_path"], f"results/TEST_{config['run_name']}_{time}.csv"
-            )
-        )  # Create dummy csv because of GDrive bug
-    results = {}
-
     # evaluation metrics
     mymetrics = MyMetrics(debug=config["debug"])
 
@@ -125,16 +116,14 @@ if __name__ == "__main__":
     test_metrics["f1_by_class"] = list(test_metrics["f1_by_class"])
     test_metrics["auc_by_class"] = list(test_metrics["auc_by_class"])
     # save all results
-    with open(f"results/TEST_{config['run_name']}_all.csv", "w") as f:
-        json.dump(test_metrics, f)
+    results = {}
+    results['all'] = test_metrics
+    for cutoff in ["2d", "5d", "13d", "noDS"]:
+        test_metrics_temp[cutoff]["f1_by_class"] = list(test_metrics_temp[cutoff]["f1_by_class"])
+        test_metrics_temp[cutoff]["auc_by_class"] = list(test_metrics_temp[cutoff]["auc_by_class"])
+        results[cutoff] = test_metrics_temp[cutoff]
 
-    
-    # save temp results
-    if config["evaluate_temporal"]:
-        for time in ["2d", "5d", "13d", "noDS"]:
-            test_metrics_temp[time]["f1_by_class"] = list(test_metrics_temp[time]["f1_by_class"])
-            test_metrics_temp[time]["auc_by_class"] = list(test_metrics_temp[time]["auc_by_class"])
-            with open(f"results/TEST_{config['run_name']}_{time}.csv", "w") as f:
-                json.dump(test_metrics_temp[time], f)
-    
-    print(f"results: {test_metrics_temp}")
+    with open(f"results/TEST_{config['run_name']}.json", "w") as f:
+        json.dump(results, f)
+
+    print(f"results: {results}")
