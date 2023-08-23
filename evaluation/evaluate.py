@@ -4,7 +4,73 @@ import pandas as pd
 import os
 import numpy as np
 import torch.nn.functional as F
+import json
+import ipdb
 
+
+def return_attn_scores(lwan, encoding, all_tokens=True, cutoffs=None):
+    # encoding: Tensor of size (Nc x T) x H
+    # mask: Tensor of size Nn x (Nc x T) x H
+    # temporal_encoding = Nn x (N x T) x hidden_size
+    T = lwan.seq_len
+    if not lwan.all_tokens:
+        T = 1  # only use the [CLS]-token representation
+    Nc = int(encoding.shape[0] / T)
+    H = lwan.hidden_size
+    Nl = lwan.num_labels
+
+    # label query: shape L, H
+    # encoding: hape NcxT, H
+    # query shape:  Nn, L, H
+    # key shape: Nn, Nc*T, H
+    # values shape: Nn, Nc*T, H
+    # key padding mask: Nn, Nc*T (true if ignore)
+    # output: N, L, H
+    mask = torch.ones(size=(Nc, Nc * T), dtype=torch.bool).to(device=lwan.device)
+    for i in range(Nc):
+        mask[i, : (i + 1) * T] = False
+
+    # only mask out at 2d, 5d, 13d and no DS to reduce computation
+    # get list of cutoff indices from cutoffs dictionary
+
+    attn_output, attn_output_weights = lwan.multiheadattn.forward(
+        query=lwan.label_queries.repeat(mask.shape[0], 1, 1),
+        key=encoding.repeat(mask.shape[0], 1, 1),
+        value=encoding.repeat(mask.shape[0], 1, 1),
+        key_padding_mask=mask,
+        need_weights=True,
+    )
+
+    score = torch.sum(
+        attn_output
+        * lwan.label_weights.unsqueeze(0).view(
+            1, lwan.num_labels, lwan.hidden_size
+        ),
+        dim=2,
+    )
+    return attn_output_weights, score
+
+
+def update_weights_per_class(labels, cutoffs, category_ids, attn_output_weights, weights_per_class):
+    labels_sample = []
+    for i in range(50):
+        if labels[i] == 1:
+            labels_sample.append(i)
+    for cutoff in cutoffs.keys():
+        cutoff_idx = cutoffs[cutoff]   
+        for l in labels_sample:   
+            attn_weights= attn_output_weights[cutoff_idx, l, :].cpu().detach().numpy().reshape(1, -1)
+            for chunk in range(cutoff_idx+1):
+                c = category_ids[chunk].item()
+                weights_per_class[cutoff][c].append( attn_output_weights[cutoff_idx, l, chunk].item())   
+    # update the 'all' key
+    cutoff_idx = attn_output_weights.shape[0]-1
+    for l in labels_sample:   
+        attn_weights= attn_output_weights[cutoff_idx, l, :].cpu().detach().numpy().reshape(1, -1)
+        for chunk in range(cutoff_idx+1):
+            c = category_ids[chunk].item()
+            weights_per_class['all'][c].append( attn_output_weights[cutoff_idx, l, chunk].item())
+    return weights_per_class
 
 def evaluate(
     mymetrics,
@@ -19,7 +85,11 @@ def evaluate(
     aux_task=None,
     setup="latest",
     reduce_computation=False,
+    qualitative_evaluation=False,
 ):
+    if qualitative_evaluation:
+        weights_per_class = {cutoff: {c: [] for c in range(15)} for cutoff in ["2d", "5d", "13d", "noDS", 'all']}
+
     model.eval()
     with torch.no_grad():
         ids = []
@@ -71,6 +141,10 @@ def evaluate(
 
                 # run through LWAN to get the scores
                 scores = model.label_attn(sequence_output, cutoffs=cutoffs)
+                if qualitative_evaluation:
+                    attn_output_weights, scores = return_attn_scores(model.label_attn, sequence_output.to(device), cutoffs=cutoffs)
+                    weights_per_class = update_weights_per_class(labels, cutoffs, category_ids, attn_output_weights, weights_per_class)
+
             else:
                 labels = data["label"][0][: model.num_labels]
                 input_ids = data["input_ids"][0]
@@ -152,5 +226,9 @@ def evaluate(
             }
         else:
             val_metrics_temp = None
+        
+        if qualitative_evaluation:
+            json.dump(weights_per_class, open("weights_per_class_3.json",'w'))    
+
 
     return val_metrics, val_metrics_temp, val_metrics_aux
