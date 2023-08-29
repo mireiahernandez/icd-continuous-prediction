@@ -5,3 +5,5 @@ __pycache__/
 slurm20*
 safe_box/
 *.sh
+*.png
+*.json

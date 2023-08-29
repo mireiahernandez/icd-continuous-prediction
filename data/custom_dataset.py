@@ -1,39 +1,35 @@
-
 import pandas as pd
 import numpy as np
 import torch
 import tqdm as tqdm
+from tqdm import tqdm
 import ast
 import os
 import itertools
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
 
 class CustomDataset(Dataset):
-    """ Custom dataset for icd-9 code prediction.
-    
+    """Custom dataset for icd-9 code prediction.
+
     Code based on HTDC (Ng et al, 2022)"""
+
     def __init__(
         self,
         notes_agg_df,
         tokenizer,
         max_chunks,
-        priority_mode="Last",  # "First, "Last", "Index", "Diverse"
-        priority_idxs=[],
+        setup="latest",  # 'uniform
+        limit_ds=0,
+        batch_size=None,
     ):
         self.notes_agg_df = notes_agg_df
         self.tokenizer = tokenizer
         self.max_chunks = max_chunks
-        assert priority_mode in ["First", "Last", "Index", "Diverse"]
-        self.priority_mode = priority_mode
-        self.priority_idxs = priority_idxs
-
-        if self.priority_mode == "Index":
-            self.priority_scores_dict = {i: 0 for i in range(15)}
-            # Prioritise Discharge Summaries (idx = 5) first, followed by selected idx
-            self.priority_scores_dict[5] = 2
-            for idx in self.priority_idxs:
-                self.priority_scores_dict[idx] = 1
+        self.batch_size = batch_size
+        self.setup = setup
+        self.limit_ds = limit_ds
+        np.random.seed(1)
 
     def __len__(self):
         return len(self.notes_agg_df)
@@ -58,7 +54,56 @@ class CustomDataset(Dataset):
         change_points.append(i)
         return change_points
 
+    def _get_cutoffs(self, hours_elapsed, category_ids):
+        cutoffs = {"2d": -1, "5d": -1, "13d": -1, "noDS": -1, "all": -1}
+        for i, (hour, cat) in enumerate(zip(hours_elapsed, category_ids)):
+            if cat != 5:
+                if hour < 2 * 24:
+                    cutoffs["2d"] = i
+                if hour < 5 * 24:
+                    cutoffs["5d"] = i
+                if hour < 13 * 24:
+                    cutoffs["13d"] = i
+                cutoffs["noDS"] = i
+            # cutoffs['all'] = i
+        return cutoffs
+
+    def filter_mask(self, seq_ids):
+        # TODO: this is producing a different mask every time, we should fix seed everytime
+        """Get selected indices according to the logic:
+        1. All indices of the first note
+        2. All indices of the last note (a.k.a. discharge summary))
+        3. Randomly select the remaining indices from the middle notes"""
+        np.random.seed(1)
+        first_indices = np.where(seq_ids == seq_ids[0])[0][: self.max_chunks]
+        # limit DS to 4 chunks
+        last_indices = np.where(seq_ids == seq_ids[-1])[0]
+        # limit last indices if more than max_chunks - len(first_indices)
+        # selecting the last max_chunks - len(first_indices) indices
+        num_last_indices = min(len(last_indices), self.max_chunks - len(first_indices))
+        last_indices = last_indices[len(last_indices) - num_last_indices :]
+        # if limit ds, then only keep the last limit_ds indices
+        last_indices = last_indices[-self.limit_ds :]
+        middle_indices = np.where(
+            np.logical_and(seq_ids > seq_ids[0], seq_ids < seq_ids[-1])
+        )[0]
+        middle_indices = np.sort(
+            np.random.choice(
+                middle_indices,
+                max(
+                    0,
+                    min(
+                        len(middle_indices),
+                        self.max_chunks - len(first_indices) - len(last_indices),
+                    ),
+                ),
+                replace=False,
+            )
+        )
+        return first_indices.tolist() + middle_indices.tolist() + last_indices.tolist()
+
     def __getitem__(self, idx):
+        np.random.seed(1)
         data = self.notes_agg_df.iloc[idx]
 
         output = [self.tokenize(doc) for doc in data.TEXT]
@@ -85,78 +130,74 @@ class CustomDataset(Dataset):
                 )
             )
         )
+        hours_elapsed = np.array(
+            list(
+                itertools.chain.from_iterable(
+                    [
+                        [data.HOURS_ELAPSED[i]] * len(output[i]["input_ids"])
+                        for i in range(len(output))
+                    ]
+                )
+            )
+        )
 
-        # temporal data
-        hours_elapsed = data.HOURS_ELAPSED
         percent_elapsed = data.PERCENT_ELAPSED
         label = torch.FloatTensor(data.ICD9_CODE_BINARY)
 
-        # create dictionary of temporal points
+        input_ids = input_ids[:]
+        attention_mask = attention_mask[:]
+        seq_ids = torch.LongTensor(seq_ids)
+        category_ids = torch.LongTensor(category_ids)
+        seq_ids = seq_ids[:]
+        category_ids = category_ids[:]
 
-        if self.priority_mode == "Index":
-            priority_scores = np.vectorize(self.priority_scores_dict.get)(category_ids)
-            priority_indices = np.argsort(priority_scores, kind="stable")
-            seq_ids = torch.LongTensor(seq_ids)
-            category_ids = torch.LongTensor(category_ids)
-
-            input_ids = input_ids[priority_indices]
-            attention_mask = attention_mask[priority_indices]
-            seq_ids = seq_ids[priority_indices]
-            category_ids = category_ids[priority_indices]
-
-        if self.priority_mode == "Diverse":
-            category_reverse_seqids = np.array(
-                list(
-                    itertools.chain.from_iterable(
-                        [
-                            [data.CATEGORY_REVERSE_SEQID[i]]
-                            * len(output[i]["input_ids"])
-                            for i in range(len(output))
-                        ]
-                    )
-                )
-            )
-            priority_indices = np.argsort(
-                -np.array(category_reverse_seqids), kind="stable"
-            )
-
-            seq_ids = torch.LongTensor(seq_ids)
-            category_ids = torch.LongTensor(category_ids)
-
-            input_ids = input_ids[priority_indices]
-            attention_mask = attention_mask[priority_indices]
-            seq_ids = seq_ids[priority_indices]
-            category_ids = category_ids[priority_indices]
-
-        if self.priority_mode == "First":
-            input_ids = input_ids[: self.max_chunks]
-            attention_mask = attention_mask[: self.max_chunks]
-            seq_ids = torch.LongTensor(seq_ids)
-            category_ids = torch.LongTensor(category_ids)
-            seq_ids = seq_ids[: self.max_chunks]
-            category_ids = category_ids[: self.max_chunks]
-        else:
+        # if latest setup, select last max_chunks
+        if self.setup == "latest":
             input_ids = input_ids[-self.max_chunks :]
             attention_mask = attention_mask[-self.max_chunks :]
             seq_ids = torch.LongTensor(seq_ids)
             category_ids = torch.LongTensor(category_ids)
             seq_ids = seq_ids[-self.max_chunks :]
             category_ids = category_ids[-self.max_chunks :]
-        
-        # store the final chunk of each note
-        note_end_chunk_ids = self._get_note_end_chunk_ids(seq_ids)
+            hours_elapsed = hours_elapsed[-self.max_chunks :]
 
+        # in a uniform setting, select first and last note
+        # and randomly sample the rest
+        elif self.setup == "uniform":
+            indices_mask = self.filter_mask(np.array(seq_ids))
+            input_ids = input_ids[indices_mask]
+            attention_mask = attention_mask[indices_mask]
+            seq_ids = seq_ids[indices_mask]
+            category_ids = category_ids[indices_mask]
+            hours_elapsed = hours_elapsed[indices_mask]
+
+        elif self.setup == "random":
+            # keep all notes and random sample during training
+            # while keeping all notes for inference
+            # crop at 95th percentile of chunks, i.e., 181.0
+            # to avoid some outliers that cause OOM
+            input_ids = input_ids[-181:]
+            attention_mask = attention_mask[-181:]
+            seq_ids = seq_ids[-181:]
+            category_ids = category_ids[-181:]
+            hours_elapsed = hours_elapsed[-181:]                
+
+        else:
+            raise ValueError("Invalid setup")
+
+        # recalculate seq ids based on filtered indices
         seq_id_vals = torch.unique(seq_ids).tolist()
         seq_id_dict = {seq: idx for idx, seq in enumerate(seq_id_vals)}
         seq_ids = seq_ids.apply_(seq_id_dict.get)
-        
+        cutoffs = self._get_cutoffs(hours_elapsed, category_ids)
+
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "seq_ids": seq_ids,
             "category_ids": category_ids,
-            "note_end_chunk_ids": note_end_chunk_ids,
             "label": label,
             "hadm_id": hadm_id,
             "hours_elapsed": hours_elapsed,
+            "cutoffs": cutoffs,
         }
