@@ -10,9 +10,30 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class CustomDataset(Dataset):
-    """Custom dataset for icd-9 code prediction.
+    """Custom dataset for real-time ICD-9 code prediction.
 
-    Code based on HTDC (Ng et al, 2022)"""
+    The complete EHR sequence is very long, therefore the custom dataset
+    allows for multiple configurations to select the chunks to use.
+
+    In particular, the following set-ups are available:
+    - latest: only the last max_chunks chunks are used
+    - uniform: the first and last note are always used, and the remaining
+    chunks are randomly sampled (this is the "random" set-up in the paper)
+    - random: all notes are used (this is the "complete EHR set-up in the paper)
+    - limit_ds: limit DS to 4 chunks (only for the "random" setup, corresponding to
+        the Limited DS set-up in the paper)
+
+    The elements of the resulting dataset include:
+    - input_ids: tokenized input
+    - attention_mask: attention mask
+    - seq_ids: sequence ids
+    - category_ids: category ids
+    - label: ICD-9 code
+    - hadm_id: HADM_ID
+    - hours_elapsed: hours elapsed since admission
+    - cutoffs: cutoffs for the different time windows (2d, 5d, 13d, noDS, all
+    - percent_elapsed: percentage of time elapsed since admission (only for the latest setup
+    """
 
     def __init__(
         self,

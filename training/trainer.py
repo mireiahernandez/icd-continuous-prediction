@@ -28,9 +28,28 @@ from transformers import (
 
 
 class Trainer:
-    """Custom trainer for icd-9 code prediction.
+    """Custom trainer for ICD-9 code prediction.
+    This trainer allows to train an autoregressive model for temporal predictions.
+    
+    Code based on HTDC (Ng et al, 2022).
 
-    Code based on HTDC (Ng et al, 2022)"""
+    Our contributions:
+    1) Temporal evaluation of autoregressive model, including the calculation of
+      temporal cutoff indices and the evaluation of the model at multiple temporal
+      points.
+    2) Auxiliary task of next document category predictions. This includes the
+      construction of true labels for next document category prediction, as well
+      as the addition of cross entropy loss.
+    3) Auxiliary task of next / last document embedding predictions. This includes
+        the construction of true labels for next / last document embedding prediction
+        (detaching the corresponding embeddings from the graph), and the calculation
+        of cosine similarity loss.
+    4) Multiobjective training. This includes backward pass of both losses.
+    5) ELA algorithm for predictions based on long documents. In the training loop,
+        this incudes random sampling of chunks to obtain a sequence of max_chunks.
+        There is also the option of ablating random sampling and selecting last
+        16 chunks.
+    """
 
     def __init__(
         self,

@@ -9,7 +9,8 @@ class DataProcessor:
     Some of the functions of this class are extracted from the HTDC (Ng et al, 2023):
     aggregate_hadm_id, add_category_information and multi_hot_encode.
 
-    The contributions of this work is to add the temporal information.
+    We added the _add_temporal_information function to add time information,
+    which is used for the temporal experiments for real-time ICD-9 coding.
     """
 
     def __init__(self, dataset_path, config):
@@ -51,12 +52,10 @@ class DataProcessor:
         self.notes_df["HADM_ID"] = self.notes_df["HADM_ID"].apply(int)
 
         # if time is missing -> assume 12:00:00
-        ### MY CONTRIBUTION #############33
         self.notes_df.CHARTTIME = self.notes_df.CHARTTIME.fillna(
             self.notes_df.CHARTDATE + " 12:00:00"
         )
         self.notes_df["CHARTTIME"] = pd.to_datetime(self.notes_df.CHARTTIME)
-        #################
 
         self.notes_df["is_discharge_summary"] = (
             self.notes_df.CATEGORY == "Discharge summary"
@@ -98,7 +97,6 @@ class DataProcessor:
             if "Discharge summary" in x
             else x,
         )
-        ##################################################################
 
         # Aggregate with the labels df
         notes_agg_df = notes_agg_df.merge(self.labels_df, on=["HADM_ID"], how="left")

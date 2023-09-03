@@ -9,6 +9,17 @@ import ipdb
 
 
 def return_attn_scores(lwan, encoding, all_tokens=True, cutoffs=None):
+    """ Calculate the attention scores for a document encoding using
+    a trained LWAN network.
+    
+    Args:
+        lwan: trained LWAN network
+        encoding: document encoding
+    
+    Returns:
+        attn_output_weights: attention weights
+        score: attention scores"""
+    
     # encoding: Tensor of size (Nc x T) x H
     # mask: Tensor of size Nn x (Nc x T) x H
     # temporal_encoding = Nn x (N x T) x hidden_size
@@ -100,6 +111,8 @@ def evaluate(
     reduce_computation=False,
     qualitative_evaluation=False,
 ):
+    """ Evaluate the model on the validation set.
+    """
     if qualitative_evaluation:
         weights_per_class = {
             cutoff: {c: [] for c in range(15)}

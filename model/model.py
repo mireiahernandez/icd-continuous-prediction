@@ -12,6 +12,8 @@ from transformers import (
 
 
 class LabelAttentionClassifier(nn.Module):
+    """ Legacy code from Clare's implementation of HTDC (Ng et al, 2022).
+    This code is not used in our implementation, but is included for completeness."""
     def __init__(self, hidden_size, num_labels):
         super().__init__()
 
@@ -48,6 +50,12 @@ class LabelAttentionClassifier(nn.Module):
 
 
 class HierARDocumentTransformer(nn.Module):
+    """Hierarchical Autoregressive Transformer.
+
+    This class includes the hierarchical autoregressive transformer,
+    which runs over the document embeddings applying masked
+    multihead attention to the previous document embeddings.
+    """
     def __init__(self, hidden_size, num_layers=1, nhead=1):
         super().__init__()
         self.hidden_size = hidden_size
@@ -73,6 +81,11 @@ class HierARDocumentTransformer(nn.Module):
 
 
 class NextDocumentCategoryPredictor(nn.Module):
+    """Document Category Predictor.
+
+    This class generates the next document category
+    based on the current document embedding.
+    """
     def __init__(self, hidden_size, num_categories):
         super().__init__()
         self.hidden_size = hidden_size
@@ -93,6 +106,11 @@ class NextDocumentCategoryPredictor(nn.Module):
 
 
 class NextDocumentEmbeddingPredictor(nn.Module):
+    """Document Embedding Generator.
+
+    This class generates the next (or last) document embedding
+    based on the current document embedding.
+    """
     def __init__(self, hidden_size):
         super().__init__()
         self.hidden_size = hidden_size
@@ -109,6 +127,14 @@ class NextDocumentEmbeddingPredictor(nn.Module):
 
 
 class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
+    """ Masked Multihead Label Attention Classifier.
+    
+    Performs masked multihead attention using label embeddings
+    as queries and document encodings as keys and values.
+
+    This class also applies linear projection and sigmoid
+    to obtain the final probability of each label.
+    """
     def __init__(
         self,
         hidden_size,
@@ -195,8 +221,14 @@ class TemporalMultiHeadLabelAttentionClassifier(nn.Module):
 class Model(nn.Module):
     """Model for ICD-9 code temporal predictions.
 
-    Model based on HTDC (Ng et al, 2022), with the original
-    contribution of adding the temporal aspect."""
+    Code based on HTDC (Ng et al, 2022).
+    
+    Our contributions:
+    - Hierarchical autoregressive transformer
+    - Auxiliary tasks, including:
+        - next document embedding predictor
+        - next document category predictor
+    """
 
     def __init__(self, config, device):
         super().__init__()

@@ -140,14 +140,10 @@ if __name__ == "__main__":
     )
     validation_generator = get_dataloader(validation_set)
 
-    test_set = get_dataset(notes_agg_df, "TEST", tokenizer=tokenizer, **dataset_config)
+    test_set = get_dataset(
+        notes_agg_df, "TEST", tokenizer=tokenizer, **dataset_config
+    )
     test_generator = get_dataloader(test_set)
-
-    # validation_set = get_dataset(notes_agg_df, "VALIDATION", tokenizer = tokenizer, **dataset_config)
-    # validation_generscator = get_dataloader(validation_set)
-
-    # test_set = get_dataset(notes_agg_df, "TEST", tokenizer = tokenizer, **dataset_config)
-    # test_generator = get_dataloader(test_set)
 
     # only to run on CPU
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -171,13 +167,13 @@ if __name__ == "__main__":
 
     scaler = GradScaler()
 
-    ########### MY CODE: LOAD FROM CHECKPOINT AND CONTINUE TRAINING ################
     training_args = {
         "TOTAL_COMPLETED_EPOCHS": 0,
         "CURRENT_BEST": 0,
         "CURRENT_PATIENCE_COUNT": 0,
     }
 
+    # code to load from checkpoint
     if config["load_from_checkpoint"]:
         checkpoint = torch.load(
             os.path.join(
@@ -212,7 +208,7 @@ if __name__ == "__main__":
             )  # Create dummy csv because of GDrive bug
     results = {}
 
-    #################################################################################
+
     trainer = Trainer(
         model,
         optimizer,
@@ -223,6 +219,7 @@ if __name__ == "__main__":
         dtype,
         categories_mapping,
     )
+    
     trainer.train(
         training_generator,
         training_args,
