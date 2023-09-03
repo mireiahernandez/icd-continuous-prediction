@@ -35,7 +35,6 @@ if __name__ == "__main__":
     )
     # TODO: update the help definitions
     parser.add_argument("-r", "--run_name", type=str, default="test", help="run name")
-  
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -85,12 +84,9 @@ if __name__ == "__main__":
     config["num_categories"] = len(categories_mapping)
     model = Model(config, device=device)
 
-
     # load best model
     checkpoint = torch.load(
-        os.path.join(
-            config["project_path"], f"results/BEST_{config['run_name']}.pth"
-        )
+        os.path.join(config["project_path"], f"results/BEST_{config['run_name']}.pth")
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
@@ -117,10 +113,14 @@ if __name__ == "__main__":
     test_metrics["auc_by_class"] = list(test_metrics["auc_by_class"])
     # save all results
     results = {}
-    results['all'] = test_metrics
+    results["all"] = test_metrics
     for cutoff in ["2d", "5d", "13d", "noDS"]:
-        test_metrics_temp[cutoff]["f1_by_class"] = list(test_metrics_temp[cutoff]["f1_by_class"])
-        test_metrics_temp[cutoff]["auc_by_class"] = list(test_metrics_temp[cutoff]["auc_by_class"])
+        test_metrics_temp[cutoff]["f1_by_class"] = list(
+            test_metrics_temp[cutoff]["f1_by_class"]
+        )
+        test_metrics_temp[cutoff]["auc_by_class"] = list(
+            test_metrics_temp[cutoff]["auc_by_class"]
+        )
         results[cutoff] = test_metrics_temp[cutoff]
 
     with open(f"results/TEST_{config['run_name']}.json", "w") as f:

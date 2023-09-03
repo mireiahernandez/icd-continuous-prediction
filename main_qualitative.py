@@ -35,7 +35,6 @@ if __name__ == "__main__":
     )
     # TODO: update the help definitions
     parser.add_argument("-r", "--run_name", type=str, default="test", help="run name")
-  
 
     args = parser.parse_args()
     args_config = vars(args)
@@ -76,7 +75,9 @@ if __name__ == "__main__":
         "limit_ds": config["limit_ds"],
     }
 
-    test_set = get_dataset(notes_agg_df, "VALIDATION", tokenizer=tokenizer, **dataset_config)
+    test_set = get_dataset(
+        notes_agg_df, "VALIDATION", tokenizer=tokenizer, **dataset_config
+    )
     test_generator = get_dataloader(test_set)
 
     # only to run on CPU
@@ -85,12 +86,9 @@ if __name__ == "__main__":
     config["num_categories"] = len(categories_mapping)
     model = Model(config, device=device)
 
-
     # load best model
     checkpoint = torch.load(
-        os.path.join(
-            config["project_path"], f"results/BEST_{config['run_name']}.pth"
-        )
+        os.path.join(config["project_path"], f"results/BEST_{config['run_name']}.pth")
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)

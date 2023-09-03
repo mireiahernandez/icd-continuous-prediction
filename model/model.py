@@ -323,7 +323,7 @@ class Model(nn.Module):
             # before: sequence_output shape [batchsize, seqlen, hiddensize] = [# chunks, 512, hidden size]
             # after: sequence_output shape [#chunks*512, 1, hidden size]
             sequence_output_all = sequence_output.view(-1, 1, self.hidden_size)
-            sequence_output_all = sequence_output_all[:,0,:]
+            sequence_output_all = sequence_output_all[:, 0, :]
             sequence_output = sequence_output[:, [0], :]
 
         else:
@@ -353,13 +353,9 @@ class Model(nn.Module):
 
         if is_evaluation == False:
             if self.use_all_tokens:
-                scores = self.label_attn(
-                    sequence_output_all, cutoffs=cutoffs
-                )
+                scores = self.label_attn(sequence_output_all, cutoffs=cutoffs)
             else:
-                scores = self.label_attn(
-                    sequence_output, cutoffs=cutoffs
-                )
+                scores = self.label_attn(sequence_output, cutoffs=cutoffs)
             return scores, sequence_output, aux_predictions
 
         else:

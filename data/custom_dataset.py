@@ -180,7 +180,7 @@ class CustomDataset(Dataset):
             attention_mask = attention_mask[-181:]
             seq_ids = seq_ids[-181:]
             category_ids = category_ids[-181:]
-            hours_elapsed = hours_elapsed[-181:]                
+            hours_elapsed = hours_elapsed[-181:]
 
         else:
             raise ValueError("Invalid setup")

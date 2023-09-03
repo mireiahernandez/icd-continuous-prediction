@@ -43,34 +43,47 @@ def return_attn_scores(lwan, encoding, all_tokens=True, cutoffs=None):
 
     score = torch.sum(
         attn_output
-        * lwan.label_weights.unsqueeze(0).view(
-            1, lwan.num_labels, lwan.hidden_size
-        ),
+        * lwan.label_weights.unsqueeze(0).view(1, lwan.num_labels, lwan.hidden_size),
         dim=2,
     )
     return attn_output_weights, score
 
 
-def update_weights_per_class(labels, cutoffs, category_ids, attn_output_weights, weights_per_class):
+def update_weights_per_class(
+    labels, cutoffs, category_ids, attn_output_weights, weights_per_class
+):
     labels_sample = []
     for i in range(50):
         if labels[i] == 1:
             labels_sample.append(i)
     for cutoff in cutoffs.keys():
-        cutoff_idx = cutoffs[cutoff]   
-        for l in labels_sample:   
-            attn_weights= attn_output_weights[cutoff_idx, l, :].cpu().detach().numpy().reshape(1, -1)
-            for chunk in range(cutoff_idx+1):
+        cutoff_idx = cutoffs[cutoff]
+        for l in labels_sample:
+            attn_weights = (
+                attn_output_weights[cutoff_idx, l, :]
+                .cpu()
+                .detach()
+                .numpy()
+                .reshape(1, -1)
+            )
+            for chunk in range(cutoff_idx + 1):
                 c = category_ids[chunk].item()
-                weights_per_class[cutoff][c].append( attn_output_weights[cutoff_idx, l, chunk].item())   
+                weights_per_class[cutoff][c].append(
+                    attn_output_weights[cutoff_idx, l, chunk].item()
+                )
     # update the 'all' key
-    cutoff_idx = attn_output_weights.shape[0]-1
-    for l in labels_sample:   
-        attn_weights= attn_output_weights[cutoff_idx, l, :].cpu().detach().numpy().reshape(1, -1)
-        for chunk in range(cutoff_idx+1):
+    cutoff_idx = attn_output_weights.shape[0] - 1
+    for l in labels_sample:
+        attn_weights = (
+            attn_output_weights[cutoff_idx, l, :].cpu().detach().numpy().reshape(1, -1)
+        )
+        for chunk in range(cutoff_idx + 1):
             c = category_ids[chunk].item()
-            weights_per_class['all'][c].append( attn_output_weights[cutoff_idx, l, chunk].item())
+            weights_per_class["all"][c].append(
+                attn_output_weights[cutoff_idx, l, chunk].item()
+            )
     return weights_per_class
+
 
 def evaluate(
     mymetrics,
@@ -88,7 +101,10 @@ def evaluate(
     qualitative_evaluation=False,
 ):
     if qualitative_evaluation:
-        weights_per_class = {cutoff: {c: [] for c in range(15)} for cutoff in ["2d", "5d", "13d", "noDS", 'all']}
+        weights_per_class = {
+            cutoff: {c: [] for c in range(15)}
+            for cutoff in ["2d", "5d", "13d", "noDS", "all"]
+        }
 
     model.eval()
     with torch.no_grad():
@@ -142,8 +158,16 @@ def evaluate(
                 # run through LWAN to get the scores
                 scores = model.label_attn(sequence_output, cutoffs=cutoffs)
                 if qualitative_evaluation:
-                    attn_output_weights, scores = return_attn_scores(model.label_attn, sequence_output.to(device), cutoffs=cutoffs)
-                    weights_per_class = update_weights_per_class(labels, cutoffs, category_ids, attn_output_weights, weights_per_class)
+                    attn_output_weights, scores = return_attn_scores(
+                        model.label_attn, sequence_output.to(device), cutoffs=cutoffs
+                    )
+                    weights_per_class = update_weights_per_class(
+                        labels,
+                        cutoffs,
+                        category_ids,
+                        attn_output_weights,
+                        weights_per_class,
+                    )
 
             else:
                 labels = data["label"][0][: model.num_labels]
@@ -226,9 +250,8 @@ def evaluate(
             }
         else:
             val_metrics_temp = None
-        
-        if qualitative_evaluation:
-            json.dump(weights_per_class, open("weights_per_class_3.json",'w'))    
 
+        if qualitative_evaluation:
+            json.dump(weights_per_class, open("weights_per_class_3.json", "w"))
 
     return val_metrics, val_metrics_temp, val_metrics_aux

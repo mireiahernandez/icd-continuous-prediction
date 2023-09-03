@@ -90,7 +90,9 @@ class Trainer:
             )
         else:
             # select last self.max_chunks indices
-            indices_mask = np.arange(max(0, input_ids.shape[0] - self.max_chunks), input_ids.shape[0])
+            indices_mask = np.arange(
+                max(0, input_ids.shape[0] - self.max_chunks), input_ids.shape[0]
+            )
 
         # filter input_ids, attention_mask, seq_ids, category_ids, hours_elapsed
         input_ids = input_ids[indices_mask]
@@ -291,7 +293,6 @@ class Trainer:
                         self.scaler.update()
                         self.optimizer.zero_grad()
                         self.lr_scheduler.step()
-
 
             print("Starting evaluation...")
             print("Epoch: %d" % (training_args["TOTAL_COMPLETED_EPOCHS"]))
