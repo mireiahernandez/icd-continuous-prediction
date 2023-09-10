@@ -226,7 +226,8 @@ class Model(nn.Module):
     Our contributions:
     - Hierarchical autoregressive transformer
     - Auxiliary tasks, including:
-        - next document embedding predictor
+        - next document embedding predictor 
+        (which can also be used for last emb. pred.)
         - next document category predictor
     """
 
