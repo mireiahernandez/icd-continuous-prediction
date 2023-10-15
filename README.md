@@ -32,10 +32,15 @@ python main.py \
 
 Quick explanation about important arguments
 --setup: it can take values random, last, uniform. ``random`` refers to applying the ECA algorithm, using random sampling during training and processing the entire sequence during inference. ``uniform`` refers to ablating the ECA algorithm and selecting $N$ random chunks. ``last" refers to ablating the ECA algorithm and selecting the last $N$ chunks.
+
 --evaluate_temporal (True or False): whether to report performance at various temporal cut-offs
+
 --num_chunks: how many chunks to process
+
 --weight_aux, aux_task, apply_transformation, apply_weight: these are legacy arguments from another project that aimed to apply auxiliary tasks for ICD coding (please disregard them)
+
 --num_layers, num_attention_heads: masked (hier) transformer hyperparameters
+
 --num_heads_labattn: number of heads in the label attention module
 --use_multihead_attention: whether to use multihead attention or the classic label attention
 
