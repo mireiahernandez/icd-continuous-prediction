@@ -1,9 +1,17 @@
-# temporal-modelling-icd
+# Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records
 
-Temporal modelling ICD-9 code predictions.
 
-This repository contains the code for the paper "Towards Real-Time Medical Coding: Temporal ICD-9 Code Prediction
-from Electronic Health Records."
+This repository contains the code for the paper "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records
+" https://arxiv.org/abs/2405.11622
+Citation:
+@misc{caralt2024continuous,
+      title={Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records}, 
+      author={Mireia Hernandez Caralt and Clarence Boon Liang Ng and Marek Rei},
+      year={2024},
+      eprint={2405.11622},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
 
 To reproduce the results, run the main file with the following arguments:
 ```
