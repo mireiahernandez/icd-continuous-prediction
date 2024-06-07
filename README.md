@@ -4,6 +4,8 @@
 This repository contains the code for the paper "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records
 " https://arxiv.org/abs/2405.11622
 
+Please use the citation below:
+```
 @misc{caralt2024continuous,
       title={Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records}, 
       author={Mireia Hernandez Caralt and Clarence Boon Liang Ng and Marek Rei},
@@ -12,6 +14,7 @@ This repository contains the code for the paper "Continuous Predictive Modeling 
       archivePrefix={arXiv},
       primaryClass={cs.CL}
 }
+```
 
 To reproduce the results, run the main file with the following arguments:
 ```
