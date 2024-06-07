@@ -1,26 +1,30 @@
 # Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records
 
+This repository contains the code for our paper, "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records" https://arxiv.org/pdf/2405.11622.
 
-This repository contains the code for the paper "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records
-" https://arxiv.org/abs/2405.11622
+# Overview
 
-Our research aims to extend the traditional ICD coding task into a continuous prediction model, allowing for ICD code predictions at various points throughout a patient's hospital stay, even before the discharge summary is available. The model employs a hierarchical transformer architecture, trained with our novel Extended-Context Algorithm. This algorithm enables the processing of unlimited, uncurated notes from the entire hospital stay, producing daily predictions.
+Our work aims to extend the traditional ICD coding task into a continuous prediction model, enabling ICD code predictions at various points throughout a patient's hospital stay, even before the discharge summary is available.
 
-Our findings demonstrate that accurate predictions can be made as early as two days after hospital admission. This advancement has the potential to significantly impact preventive care, hospital resource management, and financial planning optimization.
+# LAHST Model
 
-To cite our work please use the citation below:
-```
-@misc{caralt2024continuous,
-      title={Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records}, 
-      author={Mireia Hernandez Caralt and Clarence Boon Liang Ng and Marek Rei},
-      year={2024},
-      eprint={2405.11622},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
+To achieve this, we designed the LAHST model, which employs a hierarchical transformer architecture, trained with our novel Extended-Context Algorithm. This algorithm enables the processing of unlimited, uncurated notes from the entire hospital stay, producing daily predictions.
+Our paper shows that accurate ICD code predictions can be made as early as two days after hospital admission.
+
+# Citation
+
+If you use this code or find our work helpful, please cite our paper:
+
+css
+Copy code
+@article{yourpaper,
+  title={Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records},
+  author={Your Name and Co-authors},
+  journal={arXiv preprint arXiv:2405.11622},
+  year={2024}
 }
-```
 
-# Arguments
+# Model Architecture and Training
 
 
 To reproduce the results, run the main file with the following arguments:
