@@ -4,7 +4,9 @@
 This repository contains the code for the paper "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records
 " https://arxiv.org/abs/2405.11622
 
-Please use the citation below:
+This work aims to extend the ICD coding task to continuous prediction - enabling ICD code predictions at different points throughout the hospital stay and before the discharge summary is available. The model is a hierachical transformer trained using our proposed Extended-Context Algorithm, which allows the ingestion of unlimited and uncurated notes from the hospital stay and outputs predictions after each day. Our paper shows that predictions can be made as early as 2 days after hospital admission, which could open up avenues for preventive care, hospital resource management and optimizing financial planning.
+
+To cite our work please use the citation below:
 ```
 @misc{caralt2024continuous,
       title={Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records}, 
@@ -15,6 +17,9 @@ Please use the citation below:
       primaryClass={cs.CL}
 }
 ```
+
+# Arguments
+
 
 To reproduce the results, run the main file with the following arguments:
 ```
