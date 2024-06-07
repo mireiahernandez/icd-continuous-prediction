@@ -6,8 +6,6 @@ This repository contains the code for our paper, "Continuous Predictive Modeling
 
 Our work aims to extend the traditional ICD coding task into a continuous prediction model, enabling ICD code predictions at various points throughout a patient's hospital stay, even before the discharge summary is available.
 
-# LAHST Model
-
 To achieve this, we designed the LAHST model, which employs a hierarchical transformer architecture, trained with our novel Extended-Context Algorithm. This algorithm enables the processing of unlimited, uncurated notes from the entire hospital stay, producing daily predictions.
 Our paper shows that accurate ICD code predictions can be made as early as two days after hospital admission.
 
@@ -15,14 +13,14 @@ Our paper shows that accurate ICD code predictions can be made as early as two d
 
 If you use this code or find our work helpful, please cite our paper:
 
-css
-Copy code
+```
 @article{yourpaper,
   title={Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records},
   author={Your Name and Co-authors},
   journal={arXiv preprint arXiv:2405.11622},
   year={2024}
 }
+```
 
 # Model Architecture and Training
 
