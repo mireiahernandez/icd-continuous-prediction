@@ -1,6 +1,6 @@
 # Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records
 
-This repository contains the code for our paper, "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records" https://arxiv.org/pdf/2405.11622.
+This repository contains the code for our paper, "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records", accepted at ACL 2024 (BioNLP Workshop) https://arxiv.org/pdf/2405.11622.
 
 # Overview
 
