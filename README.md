@@ -21,6 +21,29 @@ If you use this code or find our work helpful, please cite our paper:
   year={2024}
 }
 ```
+# Prerequisites
+
+## MIMIC-III Access Required
+To use this preprocessing script, you'll need:
+
+1. **MIMIC-III Database Access**
+   - Request access to MIMIC-III through PhysioNet: https://physionet.org/content/mimiciii/
+   - Complete the required CITI training
+   - Sign the data use agreement
+   - Get your access approved
+
+2. **Required Files**
+   - Download `NOTEEVENTS.csv` from MIMIC-III database
+   - Place it in your dataset directory
+   - Ensure you have the `splits/caml_splits.csv` file in your dataset directory. These are the splits used for the experiments in the paper, which come from https://github.com/jamesmullenbach/caml-mimic (Mullenbach et al., 2018).
+
+The folder structure should look like this:
+```
+dataset/
+    |-- NOTEEVENTS.csv
+    |-- splits/
+        |-- caml_splits.csv
+```
 
 # Model Architecture and Training
 
