@@ -1,6 +1,6 @@
 # Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records
 
-This repository contains the code for our paper, "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records", accepted at ACL 2024 (BioNLP Workshop) https://arxiv.org/pdf/2405.11622.
+This repository contains the code for our paper, "Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records", accepted at ACL 2024 (BioNLP Workshop) **https://aclanthology.org/2024.bionlp-1.19/**.
 
 # Overview
 
@@ -14,12 +14,27 @@ Our paper shows that accurate ICD code predictions can be made as early as two d
 If you use this code or find our work helpful, please cite our paper:
 
 ```
-@article{yourpaper,
-  title={Continuous Predictive Modeling of Clinical Notes and ICD Codes in Patient Health Records},
-  author={Your Name and Co-authors},
-  journal={arXiv preprint arXiv:2405.11622},
-  year={2024}
+@inproceedings{caralt-etal-2024-continuous,
+    title = "Continuous Predictive Modeling of Clinical Notes and {ICD} Codes in Patient Health Records",
+    author = "Caralt, Mireia Hernandez  and
+      Ng, Clarence Boon Liang  and
+      Rei, Marek",
+    editor = "Demner-Fushman, Dina  and
+      Ananiadou, Sophia  and
+      Miwa, Makoto  and
+      Roberts, Kirk  and
+      Tsujii, Junichi",
+    booktitle = "Proceedings of the 23rd Workshop on Biomedical Natural Language Processing",
+    month = aug,
+    year = "2024",
+    address = "Bangkok, Thailand",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.bionlp-1.19",
+    doi = "10.18653/v1/2024.bionlp-1.19",
+    pages = "243--255",
+    abstract = "Electronic Health Records (EHR) serve as a valuable source of patient information, offering insights into medical histories, treatments, and outcomes. Previous research has developed systems for detecting applicable ICD codes that should be assigned while writing a given EHR document, mainly focusing on discharge summaries written at the end of a hospital stay. In this work, we investigate the potential of predicting these codes for the whole patient stay at different time points during their stay, even before they are officially assigned by clinicians. The development of methods to predict diagnoses and treatments earlier in advance could open opportunities for predictive medicine, such as identifying disease risks sooner, suggesting treatments, and optimizing resource allocation. Our experiments show that predictions regarding final ICD codes can be made already two days after admission and we propose a custom model that improves performance on this early prediction task.",
 }
+
 ```
 # Prerequisites
 
